@@ -144,6 +144,24 @@ const pictionary = quizLike({
 
 const GAMES = [
   {
+    // Social: played in the room, not on the screen — every member has a personal QR (and a
+    // short code) in the app; scanning another member's QR connects the pair once and pays
+    // both sides. Scored in state.connect, never through startAttempt. First in the list so
+    // the networking game sits at the top of every phone's hub.
+    id: 'network',
+    name: 'Power Connections',
+    emoji: '🔗',
+    color: '#0ea5e9',
+    tagline: 'Meet members, scan their QR — every connection scores!',
+    duration: 'all night',
+    howTo: ['Open your QR and show it to members you meet', 'Scan theirs with the in-app scanner or any camera app — or type their code', 'Every new member you connect with pays you BOTH 50 points', 'Once connected, save their number to your phone with one tap 📇', 'Each pair counts once · up to 1,000 — that’s 20 real connections'],
+    social: true,
+    minMs: 0,
+    score() {
+      throw new HttpError(403, 'Connections are scored when you scan a member', 'SOCIAL');
+    },
+  },
+  {
     id: 'frenzy',
     name: 'Tap Frenzy',
     emoji: '👆',
@@ -276,23 +294,6 @@ const GAMES = [
     start: pictionary.start,
     steps: pictionary.steps,
     score: pictionary.score,
-  },
-  {
-    // Social: played in the room, not on the screen — every member has a personal QR (and a
-    // short code) in the app; scanning another member's QR connects the pair once and pays
-    // both sides. Scored in state.connect, never through startAttempt.
-    id: 'network',
-    name: 'Power Connections',
-    emoji: '🔗',
-    color: '#0ea5e9',
-    tagline: 'Meet members, scan their QR — every connection scores!',
-    duration: 'all night',
-    howTo: ['Open your QR and show it to members you meet', 'Scan theirs with the in-app scanner or any camera app — or type their code', 'Every new member you connect with pays you BOTH 50 points', 'Once connected, save their number to your phone with one tap 📇', 'Each pair counts once · up to 1,000 — that’s 20 real connections'],
-    social: true,
-    minMs: 0,
-    score() {
-      throw new HttpError(403, 'Connections are scored when you scan a member', 'SOCIAL');
-    },
   },
   {
     // Bonus: every player gets one free spin of the wheel when they first arrive. The prize

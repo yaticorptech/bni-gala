@@ -523,7 +523,7 @@ class GameState extends EventEmitter {
       `NOTE:${esc(note)}`,
       'END:VCARD',
     ].filter(Boolean).join('\r\n');
-    return { name: display, vcf };
+    return { name: display, vcf, phone: other.phone ? `+91${other.phone}` : '', company: other.business || '', notes: note };
   }
 
   /**
@@ -532,10 +532,11 @@ class GameState extends EventEmitter {
    * natively with Save/Create right there. Same access rule as contactCard.
    */
   contactLink(player, code, name) {
-    this.contactCard(player, code, name); // throws unless this pair is connected
+    const card = this.contactCard(player, code, name); // throws unless this pair is connected
     const linkId = id(12);
     this.vcfLinks.set(linkId, { playerId: player.id, code: clean(code, 20).toLowerCase(), name: clean(name, 40), expires: Date.now() + 5 * 60 * 1000 });
-    return { url: `/api/vcf/${linkId}` };
+    // The fields ride along so Androids can open the contacts editor prefilled (no file at all).
+    return { url: `/api/vcf/${linkId}`, contact: { name: card.name, phone: card.phone, company: card.company, notes: card.notes } };
   }
 
   vcfByLink(linkId) {

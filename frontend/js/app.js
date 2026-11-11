@@ -625,36 +625,35 @@ async function saveContact(code, name, chapter) {
 }
 
 /**
- * Open the member's contact ON the phone so it can be saved right there — no digging in the
- * downloads folder. iPhones: navigate to the vCard (served inline) and iOS opens it natively
- * with "Create New Contact". Androids: the share sheet's Contacts target saves it directly;
- * where that's missing, the opened link hands the card to the contacts importer. The server
- * mints a short-lived link because a page navigation can't carry the login header.
+ * Open the member's contact ON the phone, ready to save — no downloads folder, no extra
+ * "open?" prompt. Androids: an intent link opens the contacts editor PREFILLED (name,
+ * number, company) so the only tap left is Save; if no app handles it, Chrome falls back
+ * to the vCard link. iPhones: navigating to the vCard (served inline) opens it natively
+ * with "Create New Contact". The server mints a short-lived link because a page
+ * navigation can't carry the login header.
  */
 async function downloadContact(code, contactName) {
-  const apple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent || '');
-  if (!apple && navigator.canShare) {
-    try {
-      const res = await fetch(apiUrl(`/api/contact/${encodeURIComponent(code)}?name=${encodeURIComponent(contactName)}`), { headers: { authorization: `Bearer ${getToken()}` } });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not fetch the contact');
-      const name = (res.headers.get('content-disposition')?.match(/filename="(.+)\.vcf"/) || [])[1] || contactName;
-      const file = new File([await res.text()], `${name}.vcf`, { type: 'text/vcard' });
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: name });
-        return;
-      }
-    } catch (err) {
-      if (err.name === 'AbortError') return; // they closed the share sheet on purpose
-      // anything else: fall through and open the card directly instead
-    }
-  }
+  let link;
   try {
-    const { url } = await api(`/api/contact/${encodeURIComponent(code)}/link`, { method: 'POST', body: { name: contactName } });
-    toast('📇 Opening the contact — tap Save / Create contact on the next screen', 4500);
-    location.href = apiUrl(url);
+    link = await api(`/api/contact/${encodeURIComponent(code)}/link`, { method: 'POST', body: { name: contactName } });
   } catch (err) {
-    toast(err.message);
+    return toast(err.message);
   }
+  const vcfUrl = apiUrl(link.url);
+  const c = link.contact || {};
+  if (/Android/i.test(navigator.userAgent || '') && c.phone) {
+    const enc = encodeURIComponent;
+    toast('📇 Opening your contacts — just tap Save', 4000);
+    location.href =
+      `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact` +
+      `;S.name=${enc(c.name)};S.phone=${enc(c.phone)}` +
+      (c.company ? `;S.company=${enc(c.company)}` : '') +
+      (c.notes ? `;S.notes=${enc(c.notes)}` : '') +
+      `;S.browser_fallback_url=${enc(vcfUrl)};end`;
+    return;
+  }
+  toast('📇 Opening the contact — tap Save / Create contact', 4500);
+  location.href = vcfUrl;
 }
 
 async function submitConnect(raw) {

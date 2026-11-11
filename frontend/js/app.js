@@ -679,9 +679,9 @@ async function submitConnect(raw) {
     confetti({ duration: 1600, count: 100 });
     toast(`🔗 Connected with ${r.other.name}! +${fmt(r.points)} for you both`, 4000);
   }
-  if (!r.already && r.other.code) {
-    // offer to save their number right away (also available later from the met list);
-    // the dialog's name field doubles as the ask — Cancel just skips it
+  if (r.other.code) {
+    // offer to save their number right away — on a fresh connection AND on a repeat scan,
+    // so scanning someone again always lets you (re)save their contact; Cancel just skips it
     saveContact(r.other.code, r.other.name, r.other.chapter).catch(() => {});
   }
   if (S.view === 'connect') {

@@ -86,7 +86,7 @@ function renderControls() {
     <div class="ctl">
       <div class="ctl-label">Solo games available</div>
       <div class="ctl-body">${data.games
-        .filter((g) => !g.hosted && !g.bonus) // the Live Quiz is run from its own card; the welcome spin is always on
+        .filter((g) => !g.hosted && !g.bonus && !g.social) // Live Quiz, welcome spin and Power Connections are always on
         .map((g) => `<label class="check"><input type="checkbox" data-game="${g.id}" ${s.enabledGames.includes(g.id) ? 'checked' : ''}> ${g.emoji} ${esc(g.name)}</label>`)
         .join('')}</div>
     </div>

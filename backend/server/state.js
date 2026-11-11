@@ -141,6 +141,11 @@ class GameState extends EventEmitter {
     this.settings = { ...defaultSettings(), ...(data.settings || {}) };
     const s = this.settings;
     s.enabledGames = s.enabledGames.filter((g) => GAME_MAP[g]);
+    // Hosted moments, bonuses and the networking game are always on — a stale admin tab
+    // saving its toggle list must never strand them.
+    for (const g of GAMES) {
+      if ((g.hosted || g.bonus || g.social) && !s.enabledGames.includes(g.id)) s.enabledGames.push(g.id);
+    }
     s.teamGames = (Array.isArray(s.teamGames) ? s.teamGames : [...DEFAULT_TEAM_GAMES]).filter((g) => GAME_MAP[g] && !GAME_MAP[g].hosted && !GAME_MAP[g].bonus && !GAME_MAP[g].social);
     if (s.screenMode === 'reveal' && !s.reveal) s.screenMode = 'hidden';
     if (!['live', 'hidden', 'reveal'].includes(s.screenMode)) s.screenMode = 'live';
@@ -264,8 +269,9 @@ class GameState extends EventEmitter {
     }
     if ('enabledGames' in patch) {
       if (!Array.isArray(patch.enabledGames)) throw new HttpError(400, 'enabledGames must be a list');
-      // Hosted games (Live Quiz) and bonuses (the welcome spin) aren't on the switch list and stay on.
-      s.enabledGames = GAMES.filter((g) => g.hosted || g.bonus || patch.enabledGames.includes(g.id)).map((g) => g.id);
+      // Hosted games (Live Quiz), bonuses (the welcome spin) and the networking game aren't
+      // on the switch list and stay on.
+      s.enabledGames = GAMES.filter((g) => g.hosted || g.bonus || g.social || patch.enabledGames.includes(g.id)).map((g) => g.id);
     }
     if ('teamGames' in patch) {
       if (!Array.isArray(patch.teamGames)) throw new HttpError(400, 'teamGames must be a list');

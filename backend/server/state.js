@@ -129,6 +129,7 @@ class GameState extends EventEmitter {
     this.roundTimers = [];
     this.live = null; // Live Quiz question on the big screen right now (see askLive)
     this.liveTimers = [];
+    this.vcfLinks = new Map(); // short-lived "open this contact" links (see contactLink)
     store.attach(() => this.snapshot());
     setInterval(() => this.sweep(), 60 * 1000).unref();
     setInterval(() => this.sweepLive(), 5 * 1000).unref();
@@ -206,13 +207,14 @@ class GameState extends EventEmitter {
     this.emit('change');
   }
 
-  /** Drop in-memory runtimes of abandoned games. */
+  /** Drop in-memory runtimes of abandoned games, and expired contact links. */
   sweep() {
     const cutoff = Date.now() - ATTEMPT_TTL_MS;
     for (const attemptId of this.runtimes.keys()) {
       const a = this.attempts.get(attemptId);
       if (!a || a.startedAt < cutoff) this.runtimes.delete(attemptId);
     }
+    for (const [linkId, l] of this.vcfLinks) if (l.expires < Date.now()) this.vcfLinks.delete(linkId);
   }
 
   /** Drop running scores that went quiet (phone died or was pocketed mid-game), so the row stops showing "playing". */
@@ -522,6 +524,25 @@ class GameState extends EventEmitter {
       'END:VCARD',
     ].filter(Boolean).join('\r\n');
     return { name: display, vcf };
+  }
+
+  /**
+   * A short-lived, no-auth link to a connected member's vCard, so the phone can NAVIGATE to
+   * it (navigations can't carry the login header) — that's what makes the contact open
+   * natively with Save/Create right there. Same access rule as contactCard.
+   */
+  contactLink(player, code, name) {
+    this.contactCard(player, code, name); // throws unless this pair is connected
+    const linkId = id(12);
+    this.vcfLinks.set(linkId, { playerId: player.id, code: clean(code, 20).toLowerCase(), name: clean(name, 40), expires: Date.now() + 5 * 60 * 1000 });
+    return { url: `/api/vcf/${linkId}` };
+  }
+
+  vcfByLink(linkId) {
+    const l = this.vcfLinks.get(linkId);
+    const player = l && l.expires >= Date.now() ? this.players.get(l.playerId) : null;
+    if (!player) throw new HttpError(410, 'This contact link expired — tap Save again in the app', 'EXPIRED');
+    return this.contactCard(player, l.code, l.name);
   }
 
   /**

@@ -91,6 +91,22 @@ module.exports = function createRoutes(state, { connections, storage }) {
       .send(vcf);
   });
 
+  // Mint a short-lived open-the-contact link (see state.contactLink) …
+  r.post('/contact/:code/link', playerAuth, (req, res) => {
+    res.json(state.contactLink(req.player, req.params.code, req.body?.name));
+  });
+
+  // … which the phone then navigates to: served INLINE so iPhones open the contact natively
+  // ("Create New Contact") and Androids hand it straight to the contacts importer.
+  r.get('/vcf/:id', (req, res) => {
+    const { name, vcf } = state.vcfByLink(req.params.id);
+    res
+      .type('text/vcard; charset=utf-8')
+      .set('Content-Disposition', `inline; filename="${name.replace(/[^\w .-]/g, '')}.vcf"`)
+      .set('Cache-Control', 'no-store')
+      .send(vcf);
+  });
+
   // A member's personal QR, shown in their app. It encodes the join URL + #c=<code>, so any
   // phone camera app can scan it: the link opens this app, which connects automatically.
   r.get('/connect-qr/:code', async (req, res, next) => {

@@ -625,37 +625,36 @@ async function saveContact(code, name, chapter) {
 }
 
 /**
- * Fetch the member's vCard (only works once connected) and hand it to the phone — the share
- * sheet where it exists (iOS/Android show "Save to Contacts"), otherwise a .vcf download the
- * phone opens into its contacts app. The server composes the final "BNI <chapter> <name>".
+ * Open the member's contact ON the phone so it can be saved right there — no digging in the
+ * downloads folder. iPhones: navigate to the vCard (served inline) and iOS opens it natively
+ * with "Create New Contact". Androids: the share sheet's Contacts target saves it directly;
+ * where that's missing, the opened link hands the card to the contacts importer. The server
+ * mints a short-lived link because a page navigation can't carry the login header.
  */
 async function downloadContact(code, contactName) {
-  let blob;
-  let name = contactName;
-  try {
-    const res = await fetch(apiUrl(`/api/contact/${encodeURIComponent(code)}?name=${encodeURIComponent(contactName)}`), { headers: { authorization: `Bearer ${getToken()}` } });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not fetch the contact');
-    name = (res.headers.get('content-disposition')?.match(/filename="(.+)\.vcf"/) || [])[1] || contactName; // "BNI <chapter> <name>"
-    blob = new Blob([await res.text()], { type: 'text/vcard' });
-  } catch (err) {
-    return toast(err.message);
-  }
-  const file = new File([blob], `${name}.vcf`, { type: 'text/vcard' });
-  if (navigator.canShare?.({ files: [file] })) {
+  const apple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent || '');
+  if (!apple && navigator.canShare) {
     try {
-      await navigator.share({ files: [file], title: name });
-      return;
-    } catch { /* cancelled or unsupported — fall through to the download */ }
+      const res = await fetch(apiUrl(`/api/contact/${encodeURIComponent(code)}?name=${encodeURIComponent(contactName)}`), { headers: { authorization: `Bearer ${getToken()}` } });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not fetch the contact');
+      const name = (res.headers.get('content-disposition')?.match(/filename="(.+)\.vcf"/) || [])[1] || contactName;
+      const file = new File([await res.text()], `${name}.vcf`, { type: 'text/vcard' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: name });
+        return;
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return; // they closed the share sheet on purpose
+      // anything else: fall through and open the card directly instead
+    }
   }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${name}.vcf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-  toast('📇 Contact downloaded — open it to save the number');
+  try {
+    const { url } = await api(`/api/contact/${encodeURIComponent(code)}/link`, { method: 'POST', body: { name: contactName } });
+    toast('📇 Opening the contact — tap Save / Create contact on the next screen', 4500);
+    location.href = apiUrl(url);
+  } catch (err) {
+    toast(err.message);
+  }
 }
 
 async function submitConnect(raw) {

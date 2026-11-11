@@ -7,7 +7,7 @@
     "backend"
   ],
   "scripts": {
-    "start": "npm run start --workspace backend"
+    "start": "node backend/server/index.js"
   },
   "engines": {
     "node": ">=18"

@@ -73,6 +73,12 @@ cd backend && npm run simulate -- --players 20
   score, shown as the battle overlay), **Live Quiz** (counts on the individual board),
   **lucky draw**, and the **grand reveal** of the top solo players.
 
+## Deploys
+
+Pushing to `main` deploys automatically: **Railway** rebuilds the backend (repo root's
+npm workspace delegates to `backend/`; live at bni-gala-production.up.railway.app) and
+**Vercel** republishes the frontend (project root `frontend/`; live at bni-gala.vercel.app).
+
 ## Storage & hosting
 
 State lives in memory and persists to `backend/data/db.json`. Set `MONGODB_URI` (e.g.

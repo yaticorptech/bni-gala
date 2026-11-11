@@ -273,7 +273,10 @@ function addActivity(a, animate = true) {
   if (animate) {
     // Every finished game gets a chime (higher score, higher note); a new best or fastest finger sparkles.
     if (a.fastest) sfx.sparkle();
-    else {
+    else if (a.with) {
+      sfx.bonus(); // two members just connected — a cheerful double note of its own
+      sfx.sparkle(0.2);
+    } else {
       const d = sfx.ding((a.score || 0) / 1000);
       if (a.improved) sfx.sparkle(d + 0.12);
     }

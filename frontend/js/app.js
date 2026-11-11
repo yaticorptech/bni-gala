@@ -498,7 +498,11 @@ function renderSpin() {
       <button class="link" id="spin-skip">Skip for now →</button>
     </div>`;
   show('spin');
-  $('#spin-skip').onclick = () => show('hub'); // not spun yet, so it comes back next login
+  $('#spin-skip').onclick = () => {
+    sfx.unlock();
+    sfx.tap();
+    show('hub'); // not spun yet, so it comes back next login
+  };
   $('#spin-btn').onclick = () => doSpin().catch(() => {});
 }
 
@@ -518,6 +522,8 @@ async function doSpin() {
   S.me.spin = { spun: true, prize: res.prize };
   if (res.already) return backToHub(); // spun on another device — the prize is already on the score
   $('#spin-skip')?.remove();
+  sfx.whoosh(); // the wheel takes off
+  vibrate(20);
   const wedges = res.wedges || SPIN_FALLBACK;
   // Six full turns, then stop with the winning wedge's centre under the pointer (4.5 s ease in the CSS).
   $('#spin-wheel').style.transform = `rotate(${360 * 6 - (res.index + 0.5) * (360 / wedges.length)}deg)`;
@@ -525,8 +531,11 @@ async function doSpin() {
     sfx.tick(); // the wheel "clicks" as it slows
     await sleep(70 + i * 20);
   }
+  sfx.drumroll(1.0); // suspense as it creeps onto the wedge
   await sleep(1200);
-  sfx.win();
+  if (res.prize >= 250) sfx.fanfare(); // the big wedges get the brass
+  else sfx.win();
+  sfx.sparkle(0.45);
   vibrate([40, 60, 120]);
   confetti({ duration: 2400, count: 150 });
   $('#spin-result').innerHTML = `<span class="spin-prize">+${fmt(res.prize)} points!</span>`;
@@ -611,6 +620,8 @@ function renderConnect() {
  * fixed, the name is the saver's to type), then fetch the vCard and hand it over.
  */
 async function saveContact(code, name, chapter) {
+  sfx.unlock();
+  sfx.tap();
   const prefix = ['BNI', chapter].filter(Boolean).join(' ');
   const picked = await modal({
     title: '📇 Save to contacts',
@@ -621,6 +632,7 @@ async function saveContact(code, name, chapter) {
     cancel: 'Cancel',
   });
   if (!picked) return;
+  sfx.good(); // off it goes to the phone's contacts
   return downloadContact(code, (picked.cname || '').trim() || name);
 }
 
@@ -676,15 +688,20 @@ async function submitConnect(raw) {
     r = await api('/api/connect', { method: 'POST', body: { code } });
   } catch (err) {
     if (err.status === 401) return signedOut('Please log in again');
+    sfx.bad();
+    vibrate(80);
     return toast(err.message);
   }
   const first = r.other.name.split(' ')[0];
   if (r.already) {
+    sfx.flip();
     toast(`You and ${first} are already connected ✓`);
   } else if (!r.points) {
+    sfx.bonus();
     toast(`🔗 Connected with ${first}! (your connection points are maxed out)`);
   } else {
     sfx.win();
+    sfx.sparkle(0.45);
     vibrate([30, 40, 80]);
     confetti({ duration: 1600, count: 100 });
     toast(`🔗 Connected with ${r.other.name}! +${fmt(r.points)} for you both`, 4000);
@@ -704,6 +721,8 @@ async function submitConnect(raw) {
 
 /** In-app scanner: BarcodeDetector where the browser has it, else the bundled jsQR over a canvas. */
 async function scanFlow() {
+  sfx.unlock();
+  sfx.tap();
   const wrap = document.createElement('div');
   wrap.className = 'scan-overlay';
   wrap.innerHTML = `<video playsinline muted></video><div class="scan-frame"></div>
@@ -752,6 +771,7 @@ async function scanFlow() {
       if (code) {
         stop();
         sfx.good();
+        vibrate(25); // the "got it" buzz the moment the QR locks
         return submitConnect(code);
       }
     } catch { /* a frame that can't be read — keep looking */ }

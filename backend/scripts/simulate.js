@@ -116,6 +116,7 @@ let settings = {}; // from /api/state
 const steppedGames = new Set(); // games played question by question (quiz, pictionary)
 const teamCodes = []; // codes of teams the bots created, so later bots can join them
 const teamSeats = new Map(); // code → members the sim has placed there
+const connectCodes = []; // Power Connections codes of bots already in the room
 
 // Hosted moments: one poller watches for a running Team Tap Battle round and an open Live
 // Quiz question; every bot then taps at a human pace, or answers (a guess) after a pause.
@@ -175,7 +176,7 @@ async function pickTeam(p, i) {
 
 async function guest(i) {
   await sleep(i * rand(1200, 3000)); // people trickle in
-  const chapter = settings.chapters?.length ? pick(settings.chapters) : pick(CHAPTERS);
+  const chapter = pick(settings.chapters);
   const body = {
     name: `${pick(FIRST)} ${pick(LAST)}`,
     phone: `9${800000000 + i}`, // unique, valid-looking 10-digit number per bot
@@ -186,11 +187,27 @@ async function guest(i) {
   const p = { name: player.name, token, skill: Math.random() };
   console.log(`+ ${p.name} registered · ${chapter} (skill ${p.skill.toFixed(2)})`);
   tapLoop(p);
+  try {
+    const spin = await call('/api/spin', { method: 'POST', token: p.token }); // the welcome spin
+    console.log(`  ${p.name} spun the wheel → +${spin.prize}`);
+  } catch (err) {
+    console.log(`  ${p.name}: spin — ${err.message}`);
+  }
+  try {
+    // Power Connections: "meet" a couple of bots who arrived earlier.
+    const cx = await call('/api/connections', { token: p.token });
+    const meet = connectCodes.slice().sort(() => Math.random() - 0.5).slice(0, int(1, 3));
+    connectCodes.push(cx.code);
+    for (const code of meet) await call('/api/connect', { method: 'POST', token: p.token, body: { code } });
+    if (meet.length) console.log(`  ${p.name} connected with ${meet.length} member${meet.length === 1 ? '' : 's'}`);
+  } catch (err) {
+    console.log(`  ${p.name}: connect — ${err.message}`);
+  }
   await sleep(rand(500, 2000));
   await pickTeam(p, i);
   const { games } = await call('/api/state');
   games.filter((g) => g.stepped).forEach((g) => steppedGames.add(g.id));
-  const solo = games.filter((g) => !g.hosted).map((g) => ({ id: g.id, mode: 'solo' }));
+  const solo = games.filter((g) => !g.hosted && !g.bonus && !g.social).map((g) => ({ id: g.id, mode: 'solo' }));
   const team = (settings.teamGames || []).map((id) => ({ id, mode: 'team' }));
   const order = [...solo, ...team].sort(() => Math.random() - 0.5);
   if (Math.random() < 0.5) order.push(pick(order)); // some retry a game
@@ -210,6 +227,10 @@ async function guest(i) {
     ({ settings } = await call('/api/state'));
   } catch {
     console.error(`Can't reach ${BASE} — is the server running (npm start)?`);
+    process.exit(1);
+  }
+  if (!settings.chapters?.length) {
+    console.error(`No chapters configured — registration needs the dropdown list.\nAdd some in ${BASE}/admin → Chapters (e.g. ${CHAPTERS.join(', ')}), then rerun.`);
     process.exit(1);
   }
   console.log(`Simulating ${PLAYERS} players against ${BASE} — watch ${BASE}/screen\n`);

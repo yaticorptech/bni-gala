@@ -1,4 +1,4 @@
-import { api, withRetry, connectSocket, getToken, setToken, clearToken, toast, sfx, esc, fmt, countUp, sleep, confetti, abortError, vibrate, photoUrl, initials } from './common.js';
+import { api, apiUrl, withRetry, connectSocket, getToken, setToken, clearToken, toast, sfx, esc, fmt, countUp, sleep, confetti, abortError, vibrate, photoUrl, initials } from './common.js';
 import rush from './games/rush.js';
 import reflex from './games/reflex.js';
 import memory from './games/memory.js';
@@ -9,7 +9,7 @@ import odd from './games/odd.js';
 import frenzy from './games/frenzy.js';
 
 const MODULES = { rush, reflex, memory, colors, pictionary, simon, odd, frenzy };
-const VIEWS = ['boot', 'join', 'hub', 'game', 'result', 'tap', 'quiz'];
+const VIEWS = ['boot', 'join', 'hub', 'game', 'result', 'tap', 'quiz', 'spin', 'connect'];
 const $ = (sel, root = document) => root.querySelector(sel);
 
 const S = {
@@ -23,6 +23,9 @@ const S = {
   roundAt: 0, // performance.now() when `round` arrived — timers run from there
   live: null, // Live Quiz question on the big screen
   liveAt: 0,
+  connect: null, // my Power Connections detail (code, points, members met)
+  connectEach: 50, // what a connection pays each side (from the server)
+  pendingConnect: '', // a code that arrived via /#c=… before login finished
 };
 let socket = null;
 
@@ -101,13 +104,15 @@ function chapterFieldHtml() {
     return `<label class="field"><span>Your BNI chapter *</span>
       <select name="chapter" required><option value="">Select your chapter</option>${s.chapters.map((c) => `<option>${esc(c)}</option>`).join('')}</select></label>`;
   }
+  // Chapters are always picked from a dropdown — no list yet means registration waits.
   return `<label class="field"><span>Your BNI chapter *</span>
-    <input name="chapter" required minlength="2" maxlength="40" placeholder="e.g. BNI Titans"></label>`;
+    <select name="chapter" required disabled><option value="">Chapter list coming soon…</option></select></label>`;
 }
 
 function renderJoin() {
   const s = S.settings;
   const login = S.joinTab !== 'register';
+  const canSubmit = login || s.chapters.length > 0; // registering needs the chapter dropdown filled in
   const fields = login
     ? `<label class="field"><span>Your mobile number *</span>
         <input name="phone" type="tel" inputmode="numeric" autocomplete="tel" required maxlength="16" placeholder="10-digit number" value="${esc(S.prefillPhone)}"></label>`
@@ -132,8 +137,8 @@ function renderJoin() {
       </div>
       <form id="join-form" autocomplete="on" novalidate>
         ${fields}
-        <button class="btn btn-primary btn-lg" type="submit">${login ? 'Log in →' : 'Let’s play →'}</button>
-        <p class="fine center">${login ? 'Use the mobile number you registered with' : `${S.games.filter((g) => !g.hosted).length} quick games · solo and team play · watch the big screen!`}</p>
+        <button class="btn btn-primary btn-lg" type="submit" ${canSubmit ? '' : 'disabled'}>${login ? 'Log in →' : 'Let’s play →'}</button>
+        <p class="fine center">${login ? 'Use the mobile number you registered with' : canSubmit ? `${S.games.filter((g) => !g.hosted && !g.bonus).length} quick games · solo and team play · watch the big screen!` : 'Registration opens once the organiser adds the chapter list — hang tight!'}</p>
       </form>
     </div>`;
 
@@ -162,9 +167,12 @@ function renderJoin() {
       S.prefillPhone = '';
       connect();
       await refreshMe();
-      renderHub();
-      show('hub');
+      landHome();
       toast(`Welcome${login ? ' back' : ''}, ${res.player.name.split(' ')[0]}! 👋`);
+      if (S.pendingConnect) {
+        submitConnect(S.pendingConnect); // they scanned a member's QR before logging in
+        S.pendingConnect = '';
+      }
     } catch (err) {
       if (err.code === 'NOT_REGISTERED') {
         S.joinTab = 'register';
@@ -214,12 +222,14 @@ function gameCardHtml(g, mode = 'solo') {
   const info = team ? S.me.teamDetail?.games[g.id] : S.me.games[g.id];
   if (!info) return '';
   const open = s.playOpen && (team ? s.teamGames : s.enabledGames).includes(g.id);
-  const done = info.left === 0;
-  const tries = info.left === null ? 'unlimited tries' : `${info.left} ${info.left === 1 ? 'try' : 'tries'} left`;
+  const done = !g.social && info.left === 0; // connections have no try limit
+  const tries = g.social ? `+${fmt(S.connectEach || 50)} each` : info.left === null ? 'unlimited tries' : `${info.left} ${info.left === 1 ? 'try' : 'tries'} left`;
   const status = team
     ? info.points != null ? `<b>${fmt(info.points)}</b> team pts${info.myBest != null ? ` · my best ${fmt(info.myBest)}` : ''}` : 'No team points yet'
+    : g.social
+    ? info.points != null ? `<b>${fmt(info.points)}</b> pts from connections` : 'No connections yet'
     : info.points != null ? `<b>${fmt(info.points)}</b> pts from ${info.used} ${info.used === 1 ? 'try' : 'tries'}` : 'Not played yet';
-  const cta = !open ? 'Closed' : done ? 'Done ✓' : info.used ? 'Again' : 'Play';
+  const cta = !open ? 'Closed' : done ? 'Done ✓' : g.social ? '🔗 Open' : info.used ? 'Again' : 'Play';
   const cls = !open ? 'is-off' : done ? 'is-done' : '';
   return `
     <button class="game-card ${cls} ${team ? 'is-team' : ''}" data-game="${g.id}" data-mode="${mode}" ${!open || done ? 'disabled' : ''}
@@ -306,7 +316,7 @@ function renderHub() {
     ${teamCardHtml()}
     ${s.playOpen ? '' : '<div class="notice">⏸ Games are closed right now — stay tuned for the results!</div>'}
     <h3 class="sec-title">🎯 Solo games <small>every point counts for you</small></h3>
-    <section class="games">${S.games.filter((g) => !g.hosted).map((g) => gameCardHtml(g, 'solo')).join('')}</section>
+    <section class="games">${S.games.filter((g) => !g.hosted && !g.bonus).map((g) => gameCardHtml(g, 'solo')).join('')}</section>
     ${me.teamDetail && teamGames.length ? `
       <h3 class="sec-title" style="--accent:${me.team?.color || '#64748b'}">👥 Team games <small>every point counts for ${esc(me.teamDetail.name)}</small></h3>
       <section class="games" id="team-games">${teamGames.map((g) => gameCardHtml(g, 'team')).join('')}</section>` : ''}
@@ -437,6 +447,301 @@ async function browseTeams() {
     html: `<div class="team-list">${rows}</div>${mine ? '' : '<p class="fine">To join one, ask its captain for the team code.</p>'}`,
     ok: 'Close',
     cancel: 'Back',
+  });
+}
+
+// ------------------------------------------------------------------ welcome spin
+
+const SPIN_COLORS = ['#e3263a', '#3b82f6', '#22c55e', '#f7c548', '#a855f7', '#f97316', '#06b6d4', '#ec4899'];
+const SPIN_FALLBACK = [100, 200, 50, 300, 75, 250, 125, 150]; // mirror of the server's wheel
+
+/** Land after login/boot: via the welcome spin if this player hasn't had theirs yet. */
+function landHome() {
+  renderHub();
+  if (S.me.spin && !S.me.spin.spun) renderSpin();
+  else show('hub');
+}
+
+/** The wheel: wedge 0 starts at the top and they run clockwise, matching the server's list. */
+function spinWheelSvg(wedges) {
+  const step = 360 / wedges.length;
+  const pt = (deg) => {
+    const a = ((deg - 90) * Math.PI) / 180;
+    return `${(100 + 97 * Math.cos(a)).toFixed(1)} ${(100 + 97 * Math.sin(a)).toFixed(1)}`;
+  };
+  const slices = wedges
+    .map(
+      (w, i) => `<path d="M100 100 L${pt(i * step)} A97 97 0 0 1 ${pt((i + 1) * step)} Z" fill="${SPIN_COLORS[i % SPIN_COLORS.length]}"/>
+      <text transform="rotate(${i * step + step / 2} 100 100)" x="100" y="36">${w}</text>`,
+    )
+    .join('');
+  return `<svg viewBox="0 0 200 200" id="spin-wheel" aria-hidden="true">
+    <circle cx="100" cy="100" r="99" fill="rgba(255,255,255,0.18)"/>${slices}
+    <circle cx="100" cy="100" r="24" fill="#0b0f1a" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+    <text x="100" y="109" class="spin-hub-emoji">🎡</text>
+  </svg>`;
+}
+
+function renderSpin() {
+  const wedges = gameById('spin')?.wedges || SPIN_FALLBACK;
+  const first = S.me.player.name.split(' ')[0];
+  $('#view-spin').innerHTML = `
+    <div class="spin-stage">
+      <div>
+        <div class="eyebrow">Welcome, ${esc(first)}! 🎉</div>
+        <h2>Spin &amp; Win</h2>
+        <p class="fine">One free spin on the house — whatever the wheel lands on goes straight onto your score.</p>
+      </div>
+      <div class="spin-box"><div class="spin-pointer">▼</div>${spinWheelSvg(wedges)}</div>
+      <div class="spin-result" id="spin-result"></div>
+      <button class="btn btn-gold btn-lg" id="spin-btn">🎡 SPIN!</button>
+      <button class="link" id="spin-skip">Skip for now →</button>
+    </div>`;
+  show('spin');
+  $('#spin-skip').onclick = () => show('hub'); // not spun yet, so it comes back next login
+  $('#spin-btn').onclick = () => doSpin().catch(() => {});
+}
+
+/** The server picks the prize; this only turns the wheel to the wedge it names. */
+async function doSpin() {
+  const btn = $('#spin-btn');
+  btn.disabled = true;
+  sfx.unlock();
+  let res;
+  try {
+    res = await api('/api/spin', { method: 'POST' });
+  } catch (err) {
+    btn.disabled = false;
+    if (err.status === 401) return signedOut('Please log in again');
+    return toast(err.message);
+  }
+  S.me.spin = { spun: true, prize: res.prize };
+  if (res.already) return backToHub(); // spun on another device — the prize is already on the score
+  $('#spin-skip')?.remove();
+  const wedges = res.wedges || SPIN_FALLBACK;
+  // Six full turns, then stop with the winning wedge's centre under the pointer (4.5 s ease in the CSS).
+  $('#spin-wheel').style.transform = `rotate(${360 * 6 - (res.index + 0.5) * (360 / wedges.length)}deg)`;
+  for (let i = 0; i < 16; i++) {
+    sfx.tick(); // the wheel "clicks" as it slows
+    await sleep(70 + i * 20);
+  }
+  await sleep(1200);
+  sfx.win();
+  vibrate([40, 60, 120]);
+  confetti({ duration: 2400, count: 150 });
+  $('#spin-result').innerHTML = `<span class="spin-prize">+${fmt(res.prize)} points!</span>`;
+  btn.outerHTML = '<button class="btn btn-primary btn-lg" id="spin-go">Let’s play →</button>';
+  $('#spin-go').onclick = backToHub;
+}
+
+// ------------------------------------------------------------------ power connections (networking)
+
+/** A code however it arrives: typed, or the whole URL a camera app read from a member's QR. */
+function parseConnectCode(raw) {
+  const s = String(raw || '').trim();
+  const m = s.match(/[#?&]c=([a-z0-9]+)/i) || s.match(/^([a-z0-9]{4,12})$/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
+async function enterConnect() {
+  show('connect');
+  $('#view-connect').innerHTML = '<div class="boot"><div class="spinner"></div></div>';
+  try {
+    S.connect = await api('/api/connections');
+    S.connectEach = S.connect.each || 50;
+  } catch (err) {
+    if (err.status === 401) return signedOut('Please log in again');
+    toast(err.message);
+    return backToHub();
+  }
+  renderConnect();
+}
+
+function renderConnect() {
+  const d = S.connect;
+  const g = gameById('network');
+  const canCam = Boolean(navigator.mediaDevices?.getUserMedia);
+  $('#view-connect').innerHTML = `
+    <header class="hub-head">
+      <div><div class="eyebrow">${g ? `${g.emoji} ${esc(g.name)}` : '🔗 Connections'}</div>
+      <h2>${fmt(d.points)} pts · ${d.met.length} met</h2></div>
+      <button class="icon-btn" id="cx-back" aria-label="Back to games">✕</button>
+    </header>
+    <section class="card cx-qr">
+      <div class="cx-qr-img"><img src="${apiUrl(`/api/connect-qr/${encodeURIComponent(d.code)}`)}" alt="My member QR"></div>
+      <div class="cx-code">${esc(d.code.toUpperCase())}</div>
+      <p class="fine center">This is <b>your</b> QR — show it to members you meet. They scan it with any camera app (or type the code) and you <b>both</b> get +${fmt(d.each)}.</p>
+    </section>
+    <section class="card cx-actions">
+      <h3>🤝 Met someone? Connect!</h3>
+      ${canCam ? '<button class="btn btn-gold btn-lg" id="cx-scan">📷 Scan their QR</button>' : ''}
+      <form id="cx-form" class="cx-row">
+        <input class="txt" id="cx-input" maxlength="24" placeholder="…or type their code" autocapitalize="none" autocomplete="off" spellcheck="false">
+        <button class="btn" type="submit">Connect</button>
+      </form>
+      ${canCam ? '' : '<p class="fine">No in-app camera on this phone — point your phone’s own camera app at their QR instead: it opens this game and connects by itself.</p>'}
+    </section>
+    <section class="card">
+      <h3>Members met${d.met.length ? ` · ${d.met.length}` : ''}</h3>
+      ${d.met.length
+        ? `<div class="cx-met-list">${d.met
+            .map(
+              (m) => `<div class="cx-met-row">
+                <span class="cx-met-who">${m.emoji || '🤝'} <b>${esc(m.name)}</b><small>${esc([m.business, m.chapter].filter(Boolean).join(' · '))}</small></span>
+                <button class="btn btn-sm" data-save="${m.code}" data-name="${esc(m.name)}">📇 Save</button>
+              </div>`,
+            )
+            .join('')}</div>`
+        : `<p class="fine">Nobody yet — go say hi! Every new member is +${fmt(d.each)} for you both.</p>`}
+    </section>`;
+  $('#cx-back').onclick = backToHub;
+  $('#cx-form').onsubmit = (e) => {
+    e.preventDefault();
+    submitConnect($('#cx-input').value);
+  };
+  const scan = $('#cx-scan');
+  if (scan) scan.onclick = () => scanFlow().catch(() => {});
+  $('#view-connect').querySelectorAll('[data-save]').forEach((b) => {
+    b.addEventListener('click', () => saveContact(b.dataset.save, b.dataset.name));
+  });
+}
+
+/**
+ * "Save their number to my phone": fetch the member's vCard (only works once connected) and
+ * hand it to the phone — the share sheet where it exists (iOS/Android show "Save to
+ * Contacts"), otherwise a .vcf download the phone opens into its contacts app.
+ */
+async function saveContact(code, name) {
+  let blob;
+  try {
+    const res = await fetch(apiUrl(`/api/contact/${encodeURIComponent(code)}`), { headers: { authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not fetch the contact');
+    blob = new Blob([await res.text()], { type: 'text/vcard' });
+  } catch (err) {
+    return toast(err.message);
+  }
+  const file = new File([blob], `${name}.vcf`, { type: 'text/vcard' });
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: name });
+      return;
+    } catch { /* cancelled or unsupported — fall through to the download */ }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${name}.vcf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  toast('📇 Contact downloaded — open it to save the number');
+}
+
+async function submitConnect(raw) {
+  const code = parseConnectCode(raw);
+  if (!code) return toast('Scan a member’s QR or type their code');
+  sfx.unlock();
+  let r;
+  try {
+    r = await api('/api/connect', { method: 'POST', body: { code } });
+  } catch (err) {
+    if (err.status === 401) return signedOut('Please log in again');
+    return toast(err.message);
+  }
+  const first = r.other.name.split(' ')[0];
+  if (r.already) {
+    toast(`You and ${first} are already connected ✓`);
+  } else if (!r.points) {
+    toast(`🔗 Connected with ${first}! (your connection points are maxed out)`);
+  } else {
+    sfx.win();
+    vibrate([30, 40, 80]);
+    confetti({ duration: 1600, count: 100 });
+    toast(`🔗 Connected with ${r.other.name}! +${fmt(r.points)} for you both`, 4000);
+  }
+  if (!r.already && r.other.code) {
+    // offer to save their number right away (also available later from the met list)
+    modal({
+      title: `📇 Save ${esc(first)}’s number?`,
+      html: `<p class="fine">Add ${esc(r.other.name)}${r.other.business ? ` · ${esc(r.other.business)}` : ''} to your phone’s contacts — that’s what networking is for!</p>`,
+      ok: '📇 Save contact',
+      cancel: 'Later',
+    }).then((ok) => ok && saveContact(r.other.code, r.other.name));
+  }
+  if (S.view === 'connect') {
+    try {
+      S.connect = await api('/api/connections');
+      renderConnect();
+    } catch { /* the next open refreshes */ }
+  }
+}
+
+/** In-app scanner: BarcodeDetector where the browser has it, else the bundled jsQR over a canvas. */
+async function scanFlow() {
+  const wrap = document.createElement('div');
+  wrap.className = 'scan-overlay';
+  wrap.innerHTML = `<video playsinline muted></video><div class="scan-frame"></div>
+    <p class="fine">Point at the member’s QR</p><button class="btn" id="scan-cancel">Cancel</button>`;
+  document.body.appendChild(wrap);
+  const video = wrap.querySelector('video');
+  let stream = null;
+  let stopped = false;
+  const stop = () => {
+    stopped = true;
+    stream?.getTracks().forEach((t) => t.stop());
+    wrap.remove();
+  };
+  wrap.querySelector('#scan-cancel').onclick = stop;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  } catch {
+    stop();
+    return toast('Camera not available here — type their code, or scan with your camera app');
+  }
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  let detect;
+  if ('BarcodeDetector' in window) {
+    const bd = new window.BarcodeDetector({ formats: ['qr_code'] });
+    detect = async () => (await bd.detect(video))[0]?.rawValue;
+  } else {
+    if (!(await loadJsQr())) {
+      stop();
+      return toast('Scanning isn’t supported on this phone — type their code instead');
+    }
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    detect = () => {
+      if (!video.videoWidth) return null;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      return window.jsQR(img.data, img.width, img.height)?.data;
+    };
+  }
+  while (!stopped) {
+    try {
+      const code = parseConnectCode(await detect());
+      if (code) {
+        stop();
+        sfx.good();
+        return submitConnect(code);
+      }
+    } catch { /* a frame that can't be read — keep looking */ }
+    await sleep(250);
+  }
+}
+
+function loadJsQr() {
+  return new Promise((resolve) => {
+    if (window.jsQR) return resolve(true);
+    const s = document.createElement('script');
+    s.src = '/js/vendor/jsqr.min.js';
+    s.onload = () => resolve(Boolean(window.jsQR));
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
   });
 }
 
@@ -774,6 +1079,7 @@ async function openGame(gameId, mode = 'solo') {
   const team = mode === 'team';
   const info = team ? S.me.teamDetail?.games[gameId] : S.me.games[gameId];
   if (!g || !info) return;
+  if (g.social) return enterConnect(); // Power Connections: the QR + scanner view, no attempt to start
   const triesLine = team
     ? (info.left === null
         ? `Unlimited team tries — every point goes to Team ${esc(S.me.teamDetail.name)}.`
@@ -1070,6 +1376,11 @@ function connect() {
 // ------------------------------------------------------------------ boot
 
 async function boot() {
+  // A member QR scanned with the phone's own camera app lands here as /#c=<code>.
+  try {
+    S.pendingConnect = parseConnectCode(location.hash);
+    if (S.pendingConnect) history.replaceState(null, '', location.pathname + location.search);
+  } catch { /* no page hash here (tests) */ }
   try {
     const st = await api('/api/state');
     S.settings = st.settings;
@@ -1083,8 +1394,11 @@ async function boot() {
   if (getToken()) {
     try {
       await refreshMe();
-      renderHub();
-      show('hub');
+      landHome();
+      if (S.pendingConnect) {
+        submitConnect(S.pendingConnect); // the scanned member connects as soon as we're in
+        S.pendingConnect = '';
+      }
     } catch (err) {
       if (err.status === 401) {
         clearToken();

@@ -73,6 +73,41 @@ module.exports = function createRoutes(state, { connections, storage }) {
 
   r.get('/me', playerAuth, (req, res) => res.json(state.me(req.player)));
 
+  // The welcome spin: one guaranteed prize per player, decided server-side (see state.spin).
+  r.post('/spin', playerAuth, (req, res) => res.json(state.spin(req.player)));
+
+  // Power Connections (networking): my QR code + members met, and connecting by scanned/typed code.
+  r.get('/connections', playerAuth, (req, res) => res.json(state.connections(req.player)));
+  r.post('/connect', playerAuth, (req, res) => res.json(state.connect(req.player, req.body?.code)));
+
+  // A connected member's contact as a vCard — "save their number to my phone". Only for
+  // members the caller has actually connected with (state.contactCard enforces it).
+  r.get('/contact/:code', playerAuth, (req, res) => {
+    const { name, vcf } = state.contactCard(req.player, req.params.code);
+    res
+      .type('text/vcard; charset=utf-8')
+      .set('Content-Disposition', `attachment; filename="${name.replace(/[^\w .-]/g, '')}.vcf"`)
+      .send(vcf);
+  });
+
+  // A member's personal QR, shown in their app. It encodes the join URL + #c=<code>, so any
+  // phone camera app can scan it: the link opens this app, which connects automatically.
+  r.get('/connect-qr/:code', async (req, res, next) => {
+    try {
+      const player = state.playerByConnectCode(req.params.code);
+      if (!player) throw new HttpError(404, 'Unknown code');
+      const svg = await QRCode.toString(`${joinUrl(req)}#c=${player.connectCode}`, {
+        type: 'svg',
+        margin: 1,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#0b0f1a', light: '#ffffff' },
+      });
+      res.type('image/svg+xml').set('Cache-Control', 'no-cache').send(svg);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Avatar emoji.
   r.put('/me', playerAuth, (req, res) => {
     state.setEmoji(req.player, req.body?.emoji);

@@ -258,6 +258,8 @@ function feedItem(a) {
   const li = document.createElement('li');
   li.innerHTML = a.fastest
     ? `<span class="fe">⚡</span><span class="ft"><b>${esc(a.name)}</b> was fastest on the Live Quiz · <b>+${fmt(a.score)}</b></span>`
+    : a.with
+    ? `<span class="fe">🔗</span><span class="ft"><b>${esc(a.name)}</b> connected with <b>${esc(a.with)}</b> · <b>+${fmt(a.score)}</b> each</span>`
     : `<span class="fe">${g?.emoji || '🎮'}</span>
     <span class="ft"><b>${esc(a.name)}</b> scored <b>${fmt(a.score)}</b> in ${esc(g?.name || '')}${a.team ? ` for ${a.team.emoji} ${esc(a.team.name)}` : ''}</span>
     ${a.improved ? '<em>NEW BEST</em>' : ''}`;

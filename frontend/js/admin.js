@@ -86,14 +86,14 @@ function renderControls() {
     <div class="ctl">
       <div class="ctl-label">Solo games available</div>
       <div class="ctl-body">${data.games
-        .filter((g) => !g.hosted) // the Live Quiz is run from its own card
+        .filter((g) => !g.hosted && !g.bonus) // the Live Quiz is run from its own card; the welcome spin is always on
         .map((g) => `<label class="check"><input type="checkbox" data-game="${g.id}" ${s.enabledGames.includes(g.id) ? 'checked' : ''}> ${g.emoji} ${esc(g.name)}</label>`)
         .join('')}</div>
     </div>
     <div class="ctl">
       <div class="ctl-label">Team games<small>Played "for the team" — points go to the team board</small></div>
       <div class="ctl-body">${data.games
-        .filter((g) => !g.hosted)
+        .filter((g) => !g.hosted && !g.bonus && !g.social) // connections are personal, not a team try
         .map((g) => `<label class="check"><input type="checkbox" data-teamgame="${g.id}" ${s.teamGames.includes(g.id) ? 'checked' : ''}> ${g.emoji} ${esc(g.name)}</label>`)
         .join('')}</div>
     </div>
@@ -113,7 +113,7 @@ function renderControls() {
       </div>
     </div>
     <div class="ctl">
-      <div class="ctl-label">Chapters<small>One per line — the join form shows them as a dropdown (empty = players type their own). Chapter standings show on the big screen.</small></div>
+      <div class="ctl-label">Chapters<small>One per line — players pick their chapter from this dropdown when they register (no chapters = registration paused). Chapter standings show on the big screen.</small></div>
       <div class="ctl-body">
         <textarea id="chapters" placeholder="BNI Titans&#10;BNI Achievers">${esc(s.chapters.join('\n'))}</textarea>
         <button class="btn" id="chapters-btn">Save chapters</button>

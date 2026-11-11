@@ -734,3 +734,65 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .btn-sm { padding: 8px 12px; font-size: 0.85rem; }
 .team-list { max-height: 50vh; overflow: auto; display: grid; gap: 4px; margin: 8px 0; }
 .team-list .mini-row small { display: block; font-weight: 500; color: var(--muted); font-size: 0.72rem; }
+
+/* ===== Welcome spin: one free Spin & Win wheel on arrival ===== */
+.spin-stage { display: grid; gap: 18px; justify-items: center; text-align: center; margin-top: 4vh; }
+.spin-stage h2 { font-size: 1.8rem; }
+.spin-box { position: relative; width: min(82vw, 46dvh, 360px); }
+.spin-pointer {
+  position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+  color: var(--gold); font-size: 1.7rem; line-height: 1; z-index: 2;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6));
+}
+#spin-wheel {
+  display: block; width: 100%; aspect-ratio: 1; border-radius: 50%;
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.14), 0 18px 50px rgba(0, 0, 0, 0.45);
+  transition: transform 4.5s cubic-bezier(0.15, 0.7, 0.1, 1);
+  will-change: transform;
+}
+#spin-wheel text { fill: #fff; font-size: 15px; font-weight: 900; text-anchor: middle; paint-order: stroke; stroke: rgba(0, 0, 0, 0.35); stroke-width: 2px; }
+#spin-wheel .spin-hub-emoji { font-size: 22px; stroke: none; }
+.spin-result { min-height: 2.4rem; }
+.spin-prize { font-size: 1.7rem; font-weight: 900; color: var(--gold); animation: pop 0.5s cubic-bezier(.2, 1.6, .4, 1); display: inline-block; }
+#spin-btn { min-width: 60%; }
+
+/* ===== Power Connections: my QR, the scanner, members met ===== */
+.cx-qr { text-align: center; }
+.cx-qr-img {
+  width: min(62vw, 240px); margin: 6px auto 10px;
+  background: #fff; border-radius: 16px; padding: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.cx-qr-img img { display: block; width: 100%; aspect-ratio: 1; }
+.cx-code { font-size: 1.5rem; font-weight: 900; letter-spacing: 6px; margin-bottom: 8px; color: var(--gold); }
+.cx-actions { display: grid; gap: 10px; }
+.cx-row { display: flex; gap: 8px; }
+.cx-row .txt { flex: 1; text-transform: uppercase; letter-spacing: 2px; }
+.cx-met-list { display: grid; gap: 8px; }
+.cx-met-row {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 8px 10px;
+}
+.cx-met-who { flex: 1; min-width: 0; line-height: 1.25; }
+.cx-met-who small { display: block; color: var(--muted); font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-met-row .btn { flex: none; }
+.scan-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(5, 8, 15, 0.96);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding: 20px;
+}
+.scan-overlay video {
+  width: min(92vw, 420px); aspect-ratio: 1; object-fit: cover;
+  border-radius: 18px; background: #000;
+}
+.scan-frame {
+  position: absolute; width: min(60vw, 250px); aspect-ratio: 1;
+  border: 3px solid var(--gold); border-radius: 18px;
+  box-shadow: 0 0 0 2000px rgba(5, 8, 15, 0.35);
+  pointer-events: none;
+  animation: pulseBtn 1.4s infinite;
+}
+

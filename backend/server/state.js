@@ -39,6 +39,7 @@ const EMOJIS = ['🦁', '🐯', '🦊', '🐼', '🐨', '🦄', '🐸', '🐙', 
 const validEmoji = (e) => (EMOJIS.includes(e) ? e : '');
 
 const DEFAULT_TEAM_GAMES = ['frenzy', 'rush', 'colors', 'odd'];
+const CONNECT_POINTS = 50; // what BOTH members earn for a new connection (see connect())
 
 const defaultSettings = () => ({
   eventTitle: config.defaultTitle,
@@ -51,7 +52,7 @@ const defaultSettings = () => ({
   maxTeamSize: 5,
   enabledGames: GAMES.map((g) => g.id),
   teamGames: [...DEFAULT_TEAM_GAMES], // games that can be played "for the team"
-  chapters: [], // fixed list → shown as a dropdown on the join form; empty → free text
+  chapters: [], // join-form dropdown — players must pick one; empty list pauses registration
   teamScores: {}, // teamId → taps across all Tap Battle rounds
   teamRounds: [], // finished rounds [{ no, at, durationMs, taps: {teamId: n}, ranking, tie, tappers }]
   knownGames: GAMES.map((g) => g.id), // so games added later can be switched on automatically
@@ -139,7 +140,7 @@ class GameState extends EventEmitter {
     this.settings = { ...defaultSettings(), ...(data.settings || {}) };
     const s = this.settings;
     s.enabledGames = s.enabledGames.filter((g) => GAME_MAP[g]);
-    s.teamGames = (Array.isArray(s.teamGames) ? s.teamGames : [...DEFAULT_TEAM_GAMES]).filter((g) => GAME_MAP[g] && !GAME_MAP[g].hosted);
+    s.teamGames = (Array.isArray(s.teamGames) ? s.teamGames : [...DEFAULT_TEAM_GAMES]).filter((g) => GAME_MAP[g] && !GAME_MAP[g].hosted && !GAME_MAP[g].bonus && !GAME_MAP[g].social);
     if (s.screenMode === 'reveal' && !s.reveal) s.screenMode = 'hidden';
     if (!['live', 'hidden', 'reveal'].includes(s.screenMode)) s.screenMode = 'live';
     s.chapters = (Array.isArray(s.chapters) ? s.chapters : []).map((c) => clean(c, 40)).filter(Boolean);
@@ -172,6 +173,13 @@ class GameState extends EventEmitter {
       this.byToken.set(p.token, p);
     }
     for (const a of data.attempts || []) if (this.players.has(a.playerId)) this.attempts.set(a.id, a);
+    // Players from before Power Connections get their personal QR code now.
+    for (const p of this.players.values()) {
+      if (!p.connectCode) {
+        p.connectCode = this.uniqueConnectCode();
+        this.persist('savePlayer', p);
+      }
+    }
   }
 
   snapshot() {
@@ -254,12 +262,12 @@ class GameState extends EventEmitter {
     }
     if ('enabledGames' in patch) {
       if (!Array.isArray(patch.enabledGames)) throw new HttpError(400, 'enabledGames must be a list');
-      // Hosted games (Live Quiz) aren't on the switch list and stay on.
-      s.enabledGames = GAMES.filter((g) => g.hosted || patch.enabledGames.includes(g.id)).map((g) => g.id);
+      // Hosted games (Live Quiz) and bonuses (the welcome spin) aren't on the switch list and stay on.
+      s.enabledGames = GAMES.filter((g) => g.hosted || g.bonus || patch.enabledGames.includes(g.id)).map((g) => g.id);
     }
     if ('teamGames' in patch) {
       if (!Array.isArray(patch.teamGames)) throw new HttpError(400, 'teamGames must be a list');
-      s.teamGames = GAMES.filter((g) => !g.hosted && patch.teamGames.includes(g.id)).map((g) => g.id);
+      s.teamGames = GAMES.filter((g) => !g.hosted && !g.bonus && !g.social && patch.teamGames.includes(g.id)).map((g) => g.id);
     }
     if ('chapters' in patch) {
       if (!Array.isArray(patch.chapters)) throw new HttpError(400, 'chapters must be a list');
@@ -325,11 +333,8 @@ class GameState extends EventEmitter {
     const name = clean(body.name, 40);
     if (name.length < 2) throw new HttpError(400, 'Please enter your name');
     const chapter = clean(body.chapter, 40);
-    if (this.settings.chapters.length) {
-      if (!this.settings.chapters.includes(chapter)) throw new HttpError(400, 'Please pick your chapter from the list');
-    } else if (chapter.length < 2) {
-      throw new HttpError(400, 'Please enter your BNI chapter');
-    }
+    if (!this.settings.chapters.length) throw new HttpError(400, 'Registration isn’t open yet — the organiser hasn’t added the chapter list');
+    if (!this.settings.chapters.includes(chapter)) throw new HttpError(400, 'Please pick your chapter from the list');
     return this.addPlayer({ name, business: clean(body.business, 60), chapter, phone, emoji });
   }
 
@@ -340,7 +345,7 @@ class GameState extends EventEmitter {
   }
 
   addPlayer({ name, business, chapter, phone = '', emoji = '' }) {
-    const p = { id: id(), token: token(), name, emoji, business, chapter, phone, teamId: null, createdAt: Date.now() };
+    const p = { id: id(), token: token(), name, emoji, business, chapter, phone, teamId: null, connectCode: this.uniqueConnectCode(), createdAt: Date.now() };
     this.players.set(p.id, p);
     this.byToken.set(p.token, p);
     this.persist('savePlayer', p);
@@ -444,7 +449,144 @@ class GameState extends EventEmitter {
     for (const g of GAMES) {
       games[g.id] = { points: row?.scores[g.id] ?? null, best: this.bestScore(player.id, g.id), used: used[g.id], left: this.attemptsLeft(used[g.id]) };
     }
-    return { player: publicPlayer(player), games, teamDetail: this.teamDetail(player), ...this.livePayload(player.id) };
+    const spun = this.spinAttempt(player.id);
+    return { player: publicPlayer(player), games, spin: { spun: Boolean(spun), prize: spun?.score ?? null }, teamDetail: this.teamDetail(player), ...this.livePayload(player.id) };
+  }
+
+  // ------------------------------------------------------------- power connections (networking)
+
+  /** A short, typeable personal code (the QR holds it too). The alphabet has no confusable letters. */
+  uniqueConnectCode() {
+    let c = id(6);
+    while (this.playerByConnectCode(c)) c = id(6);
+    return c;
+  }
+
+  playerByConnectCode(code) {
+    const c = clean(code, 20).toLowerCase();
+    if (!c) return null;
+    for (const p of this.players.values()) if (p.connectCode === c) return p;
+    return null;
+  }
+
+  /** The player's one accumulating 'network' attempt; meta.met = ids of members already connected. */
+  networkAttempt(playerId, create = false) {
+    for (const a of this.attempts.values()) {
+      if (a.playerId === playerId && a.gameId === 'network' && !a.teamId) {
+        if (!a.meta || !Array.isArray(a.meta.met)) a.meta = { met: [] };
+        return a;
+      }
+    }
+    if (!create) return null;
+    const now = Date.now();
+    const a = { id: id(12), playerId, gameId: 'network', teamId: null, startedAt: now, finishedAt: now, score: 0, meta: { met: [] }, pb: false };
+    this.attempts.set(a.id, a);
+    return a;
+  }
+
+  /** What the networking view shows: my code, my points, and the members I've met. */
+  connections(player) {
+    const att = this.networkAttempt(player.id);
+    const met = (att?.meta.met || [])
+      .map((pid) => this.players.get(pid))
+      .filter(Boolean)
+      .map(({ name, emoji, business, chapter, connectCode }) => ({ name, emoji: emoji || '', business, chapter, code: connectCode }));
+    return { code: player.connectCode, points: att?.score ?? 0, met, each: CONNECT_POINTS };
+  }
+
+  /**
+   * A connected member's contact as a vCard, for "save their number to my phone". The number
+   * is only shared with members this player has actually connected with — showing your QR at
+   * the table is the consent.
+   */
+  contactCard(player, code) {
+    const other = this.playerByConnectCode(code);
+    if (!other) throw new HttpError(404, 'No member found for that code');
+    const att = this.networkAttempt(player.id);
+    if (!att || !att.meta.met.includes(other.id)) {
+      throw new HttpError(403, 'Connect with them first — then you can save their contact', 'NOT_CONNECTED');
+    }
+    const esc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, '\\$&').replace(/\r?\n/g, '\\n');
+    const note = [other.chapter && `${other.chapter}`, `Met at ${this.settings.eventTitle}`].filter(Boolean).join(' · ');
+    const vcf = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `N:;${esc(other.name)};;;`,
+      `FN:${esc(other.name)}`,
+      other.phone && `TEL;TYPE=CELL:+91${other.phone}`,
+      other.business && `ORG:${esc(other.business)}`,
+      `NOTE:${esc(note)}`,
+      'END:VCARD',
+    ].filter(Boolean).join('\r\n');
+    return { name: other.name, vcf };
+  }
+
+  /**
+   * One member scanned another's QR (or typed their code): the pair connects once, ever, and
+   * BOTH sides earn CONNECT_POINTS — networking is mutual. Accumulates in one running
+   * 'network' attempt per player (capped at 1000), so it counts on the solo board.
+   */
+  connect(player, rawCode) {
+    if (!this.settings.playOpen || !this.settings.enabledGames.includes('network')) {
+      throw new HttpError(403, 'This game is closed right now', 'CLOSED');
+    }
+    const other = this.playerByConnectCode(rawCode);
+    if (!other) throw new HttpError(404, 'No member found for that code — check it and try again');
+    if (other.id === player.id) throw new HttpError(400, 'That’s your own code — go meet another member! 😄', 'SELF');
+    const mine = this.networkAttempt(player.id, true);
+    if (mine.meta.met.includes(other.id)) {
+      return { already: true, points: 0, total: mine.score, met: mine.meta.met.length, other: { ...publicPlayer(other), code: other.connectCode } };
+    }
+    const theirs = this.networkAttempt(other.id, true);
+    const now = Date.now();
+    const gained = Math.min(MAX, mine.score + CONNECT_POINTS) - mine.score;
+    mine.meta.met.push(other.id);
+    mine.score += gained;
+    mine.finishedAt = now;
+    if (!theirs.meta.met.includes(player.id)) {
+      theirs.meta.met.push(player.id);
+      theirs.score = Math.min(MAX, theirs.score + CONNECT_POINTS);
+      theirs.finishedAt = now;
+    }
+    this.persist('saveAttempt', mine);
+    this.persist('saveAttempt', theirs);
+    this.changed();
+    const item = { playerId: player.id, name: player.name, gameId: 'network', score: CONNECT_POINTS, with: other.name, at: now };
+    this.recent.unshift(item);
+    this.recent.length = Math.min(this.recent.length, 12);
+    this.emit('activity', item);
+    return { already: false, points: gained, total: mine.score, met: mine.meta.met.length, other: { ...publicPlayer(other), code: other.connectCode } };
+  }
+
+  // ------------------------------------------------------------- welcome spin
+
+  /** The player's one welcome-spin attempt, if they've had it (per scoreboard — a score reset gives it back). */
+  spinAttempt(playerId) {
+    for (const a of this.attempts.values()) if (a.playerId === playerId && a.gameId === 'spin') return a;
+    return null;
+  }
+
+  /**
+   * Spin & Win: one guaranteed prize per player, picked here with crypto randomness — the
+   * phone only animates the wheel to the wedge the server names. Idempotent: spinning again
+   * returns the original prize.
+   */
+  spin(player) {
+    const game = GAME_MAP.spin;
+    const prev = this.spinAttempt(player.id);
+    if (prev) return { already: true, prize: prev.score, index: prev.meta?.index ?? 0, wedges: game.wedges };
+    const index = crypto.randomInt(game.wedges.length);
+    const prize = game.wedges[index];
+    const now = Date.now();
+    const a = { id: id(12), playerId: player.id, gameId: 'spin', teamId: null, startedAt: now, finishedAt: now, score: prize, meta: { index }, pb: true };
+    this.attempts.set(a.id, a);
+    this.persist('saveAttempt', a);
+    this.changed();
+    const item = { playerId: player.id, name: player.name, gameId: 'spin', score: prize, improved: false, at: now };
+    this.recent.unshift(item);
+    this.recent.length = Math.min(this.recent.length, 12);
+    this.emit('activity', item);
+    return { already: false, prize, index, wedges: game.wedges };
   }
 
   /** The full team view for its member: join code, member list, per-game team points and tries. */
@@ -659,6 +801,8 @@ class GameState extends EventEmitter {
     const game = GAME_MAP[gameId];
     if (!game) throw new HttpError(404, 'Unknown game');
     if (game.hosted) throw new HttpError(403, 'This one is hosted on the big screen — join in when the organiser starts it', 'HOSTED');
+    if (game.bonus) throw new HttpError(403, 'This bonus is credited automatically', 'BONUS');
+    if (game.social) throw new HttpError(403, 'Connections are scored when you scan a member', 'SOCIAL');
     if (!this.settings.playOpen) throw new HttpError(403, 'Games are closed right now', 'CLOSED');
     const forTeam = mode === 'team';
     let team = null;
@@ -1149,7 +1293,7 @@ class GameState extends EventEmitter {
     const result = {
       ranked,
       rankById: new Map(ranked.map((r) => [r.id, r])),
-      leaders: GAMES.map((g) => ({ gameId: g.id, ...(leaders[g.id] || {}) })),
+      leaders: GAMES.filter((g) => !g.bonus).map((g) => ({ gameId: g.id, ...(leaders[g.id] || {}) })), // no "champion" of a luck bonus
       chapters: [...chapterMap.values()].sort((x, y) => y.total - x.total),
       plays: finished.length,
     };

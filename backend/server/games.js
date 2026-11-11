@@ -278,6 +278,40 @@ const GAMES = [
     score: pictionary.score,
   },
   {
+    // Social: played in the room, not on the screen — every member has a personal QR (and a
+    // short code) in the app; scanning another member's QR connects the pair once and pays
+    // both sides. Scored in state.connect, never through startAttempt.
+    id: 'network',
+    name: 'Power Connections',
+    emoji: '🔗',
+    color: '#0ea5e9',
+    tagline: 'Meet members, scan their QR — every connection scores!',
+    duration: 'all night',
+    howTo: ['Open your QR and show it to members you meet', 'Scan theirs with the in-app scanner or any camera app — or type their code', 'Every new member you connect with pays you BOTH 50 points', 'Once connected, save their number to your phone with one tap 📇', 'Each pair counts once · up to 1,000 — that’s 20 real connections'],
+    social: true,
+    minMs: 0,
+    score() {
+      throw new HttpError(403, 'Connections are scored when you scan a member', 'SOCIAL');
+    },
+  },
+  {
+    // Bonus: every player gets one free spin of the wheel when they first arrive. The prize
+    // is picked server-side (state.spin) — never started through startAttempt, never a game card.
+    id: 'spin',
+    name: 'Spin & Win',
+    emoji: '🎡',
+    color: '#f7c548',
+    tagline: 'One free spin — welcome points for everyone!',
+    duration: 'one spin',
+    howTo: ['Every player gets one spin of the wheel on arrival', 'Whatever it lands on is yours — 50 to 300 points', 'The points count on your solo score'],
+    bonus: true,
+    wedges: [100, 200, 50, 300, 75, 250, 125, 150], // what the wheel says, clockwise from the top
+    minMs: 0,
+    score() {
+      throw new HttpError(403, 'The welcome spin is credited by the server', 'BONUS');
+    },
+  },
+  {
     // Hosted: the organiser asks questions on the big screen (see state.js askLive); phones
     // can't start it themselves. Points are credited by closeLive, never through finishAttempt.
     id: 'live',
@@ -298,6 +332,9 @@ const GAMES = [
 const GAME_MAP = Object.fromEntries(GAMES.map((g) => [g.id, g]));
 
 const publicGames = () =>
-  GAMES.map(({ id, name, emoji, color, tagline, duration, howTo, hosted, steps }) => ({ id, name, emoji, color, tagline, duration, howTo, hosted: Boolean(hosted), stepped: Boolean(steps), maxScore: MAX }));
+  GAMES.map(({ id, name, emoji, color, tagline, duration, howTo, hosted, steps, bonus, wedges, social }) => ({
+    id, name, emoji, color, tagline, duration, howTo,
+    hosted: Boolean(hosted), stepped: Boolean(steps), bonus: Boolean(bonus), social: Boolean(social), wedges: wedges || null, maxScore: MAX,
+  }));
 
 module.exports = { GAMES, GAME_MAP, publicGames, quizRuntime, MAX };

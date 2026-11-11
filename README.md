@@ -1,6 +1,7 @@
 # 🏆 BNI Game Arena
 
-Multi-chapter games platform for BNI events: members pick their **chapter**, register with
+Multi-chapter games platform for BNI events: members pick their **chapter** from a
+dropdown (the organiser sets the list in `/admin`; registration waits until it's filled in), register with
 **name + mobile number** (the number is their login — no passwords, no OTP), then play
 **solo games** for the individual leaderboard and **team games** for the team leaderboard.
 Anyone can **create a team** and share its 5-letter code; friends join with the code.
@@ -14,7 +15,7 @@ admin-dealt ones.
 
 | Page | Who | What |
 | --- | --- | --- |
-| `/` | players (phones) | login/register, solo games, team hub + team games |
+| `/` | players (phones) | login/register, game hub, team hub |
 | `/screen` | projector | live board, team leaderboard, chapter standings, feed, overlays |
 | `/admin` | organiser | settings, chapters, teams, Tap Battle, Live Quiz, lucky draw, reveal, CSV |
 
@@ -46,6 +47,9 @@ cd backend && npm run simulate -- --players 20
 
 ## How scoring works
 
+- **Welcome spin**: every player gets one free **Spin & Win** 🎡 right after registering
+  (or on first login) — the wheel pays 50–300 points onto their solo score. The prize is
+  picked server-side; a score reset gives everyone their spin back.
 - **Solo**: every finished try adds to the player's total (default 3 tries per game,
   settable in `/admin`). All scoring is server-side in `backend/server/games.js`.
 - **Team games** (default: Tap Frenzy, Referral Rush, Colour Clash, Odd One Out —
@@ -56,6 +60,14 @@ cd backend && npm run simulate -- --players 20
   captain leaves, the longest-standing member takes over; an empty team dissolves. The
   join code is only visible to members and the admin.
 - **Chapter standings**: solo totals summed per chapter, on the big screen.
+- **Power Connections** 🔗 — the networking game: every member has a personal QR (and a
+  short code) in the app. Meet someone, scan their QR — with the in-app scanner, or any
+  phone camera app (the QR is a link that opens the game and connects by itself) — or type
+  their code, and you **both** get 50 points. Each pair counts once; up to 1,000 points
+  (20 real connections). Pairings are validated server-side and show on the big-screen feed.
+  Once connected, either member can **save the other's number to their phone** in one tap
+  (a vCard with name, number, business and chapter) — the number is only ever shared with
+  members you've actually connected with.
 - **Hosted moments** (from `/admin`): **Team Tap Battle** rounds (taps are their own
   score, shown as the battle overlay), **Live Quiz** (counts on the individual board),
   **lucky draw**, and the **grand reveal** of the top solo players.
@@ -74,7 +86,7 @@ backend.
 backend/
   server/index.js     express + socket.io bootstrap, serves frontend/
   server/state.js     all game/team/player state + rules (single source of truth)
-  server/games.js     the 8 games' server-side scoring
+  server/games.js     the games' server-side scoring
   server/routes.js    REST API (public, player, team, admin)
   server/realtime.js  socket rooms: players / screen / admin
   server/store/       JSON file or MongoDB persistence
@@ -83,5 +95,5 @@ frontend/
   index.html + js/app.js       player app (login, hub, games, team hub, tap battle, quiz)
   screen.html + js/screen.js   big screen
   admin.html + js/admin.js     admin panel
-  js/games/*.js                the 8 game modules (shared with bni-games)
+  js/games/*.js                the 8 solo game modules (shared with bni-games)
 ```

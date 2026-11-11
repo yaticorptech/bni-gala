@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>BNI Game Arena · Admin</title>
+  <link rel="icon" type="image/png" href="/img/brand/mark.png">
+  <link rel="apple-touch-icon" href="/img/brand/icon-512.png">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="admin">
+  <section id="login" class="login hidden">
+    <form id="login-form" class="card form">
+      <div class="login-brands"><img class="brand-tile" src="/img/brand/bni-inspire.png" alt="BNI Inspire"><img class="login-logo" src="/img/brand/yaticorp-white.png" alt="Yaticorp"></div>
+      <div class="hero-badge small">⚙️</div>
+      <h2>Games admin</h2>
+      <label class="field"><span>Admin password</span><input type="password" name="password" autocomplete="current-password" required autofocus></label>
+      <button class="btn btn-primary btn-lg" type="submit">Sign in</button>
+    </form>
+  </section>
+
+  <div id="dash" class="dash hidden">
+    <header class="ad-head">
+      <div class="ad-brand">
+        <img class="brand-tile" src="/img/brand/bni-inspire.png" alt="BNI Inspire">
+        <div>
+          <div class="eyebrow">Admin</div>
+          <h1 id="ad-title">Award Night</h1>
+        </div>
+      </div>
+      <nav class="ad-links">
+        <a class="btn" href="/screen" target="_blank" rel="noopener">📺 Open big screen</a>
+        <a class="btn" href="/" target="_blank" rel="noopener">📱 Player page</a>
+        <button class="btn btn-ghost" id="logout-btn">Sign out</button>
+        <img class="ad-logo" src="/img/brand/yaticorp-white.png" alt="Yaticorp" title="Powered by Yaticorp">
+      </nav>
+    </header>
+
+    <section class="stats" id="stats"></section>
+
+    <div class="ad-grid">
+      <section class="card" id="controls"></section>
+      <section class="card join-card" id="join-card"></section>
+    </div>
+
+    <section class="card" id="team-card"></section>
+    <section class="card" id="livequiz-card"></section>
+    <section class="card" id="draw-card"></section>
+
+    <section class="card">
+      <div class="tbl-head">
+        <h3>Players</h3>
+        <div class="tbl-tools">
+          <input id="search" class="search" type="search" placeholder="Search name, business, chapter…">
+          <button class="btn" id="export-btn">⬇ Export CSV</button>
+        </div>
+      </div>
+      <div class="tbl-wrap"><table id="players"></table></div>
+    </section>
+
+    <section class="card danger">
+      <div>
+        <h3>Reset</h3>
+        <p class="fine"><b>Reset scores</b> clears every score, team round, lucky-draw winner and quiz progress but keeps everyone logged in and every team intact — use it after a rehearsal.
+          <b>Remove everyone too</b> also deletes the players and their teams, so they register again. Settings and quiz questions always stay.</p>
+      </div>
+      <div class="ctl-body">
+        <button class="btn btn-gold" id="reset-scores-btn">↺ Reset scores</button>
+        <button class="btn" id="reset-btn">🗑 Remove everyone too</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

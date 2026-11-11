@@ -1,0 +1,12 @@
+{
+  "name": "bni-arena-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pages for BNI Game Arena: plain HTML/CSS/JS, no build step",
+  "scripts": {
+    "dev": "node dev-server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

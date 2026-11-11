@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BNI Game Arena · Live Leaderboard</title>
+  <link rel="icon" type="image/png" href="/img/brand/mark.png">
+  <link rel="apple-touch-icon" href="/img/brand/icon-512.png">
+  <link rel="stylesheet" href="/css/screen.css">
+</head>
+<body data-mode="live">
+  <header class="top">
+    <div class="brand">
+      <img class="brand-logo" src="/img/brand/bni-inspire.png" alt="BNI Inspire">
+      <div>
+        <h1 id="title">Award Night</h1>
+        <p id="tagline"></p>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="pill live-pill" id="live-pill"><span class="dot"></span><span id="live-text">LIVE</span></div>
+      <div class="pill playing-pill" id="playing-pill"><span class="dot"></span><b id="stat-playing">0</b> playing now</div>
+      <div class="pill"><b id="stat-players">0</b> players</div>
+      <div class="pill"><b id="stat-plays">0</b> games played</div>
+      <img class="top-logo" src="/img/brand/yaticorp-white.png" alt="Yaticorp">
+    </div>
+  </header>
+
+  <main class="layout live-layout">
+    <section class="board-wrap">
+      <div class="board-head">
+        <span>Rank</span><span></span><span>Player</span><span class="games-head" id="games-head"></span><span></span><span class="right">Total</span>
+      </div>
+      <div class="board" id="board"></div>
+      <div class="empty hidden" id="empty">
+        <div class="empty-icon">🎮</div>
+        <h2>Be the first on the board!</h2>
+        <p>Scan the QR code to play →</p>
+      </div>
+    </section>
+    <aside class="side">
+      </div>
+      <div class="panel" id="champions-panel">
+        <h2>🏅 Game champions</h2>
+        <ul class="champions" id="champions"></ul>
+      </div>
+      <div class="panel hidden" id="chapters-panel">
+        <h2>🏛️ Chapter standings</h2>
+        <ol class="chapters" id="chapters"></ol>
+      </div>
+      <div class="panel hidden" id="teams-panel">
+        <h2>👥 Team leaderboard</h2>
+        <ol class="chapters" id="standings"></ol>
+      </div>
+      <div class="panel playing-panel hidden" id="playing-panel">
+        <h2>🎮 Playing right now</h2>
+        <ul class="playing" id="playing"></ul>
+      </div>
+      <div class="panel feed-panel">
+        <h2>⚡ Live feed</h2>
+        <ul class="feed" id="feed"></ul>
+      </div>
+    </aside>
+  </main>
+
+  <main class="layout hidden-layout">
+    <div class="secret">
+      <div class="secret-icon">🤫</div>
+      <h2>The leaderboard is now hidden</h2>
+      <p>Final results will be revealed on stage…</p>
+      <div class="secret-qr" id="secret-qr">
+        <img class="qr" alt="QR code to join">
+        <span>Still time to play — scan now!</span>
+      </div>
+    </div>
+  </main>
+
+  <main class="layout reveal-layout">
+    <div class="reveal" id="reveal"></div>
+  </main>
+
+  <!-- Hosted moments ride on top of whatever the board is showing -->
+  <div class="overlay hidden" id="battle-overlay">
+    <div class="battle-head"><h2 id="battle-title">👥 Team Tap Battle</h2><div class="battle-clock" id="battle-clock"></div></div>
+    <div class="bars" id="bars"></div>
+    <p class="battle-foot" id="battle-foot"></p>
+    <div class="battle-count hidden" id="battle-count"></div>
+  </div>
+  <div class="overlay hidden" id="quiz-overlay"></div>
+  <div class="overlay hidden" id="draw-overlay"></div>
+
+  <div class="banner" id="banner"></div>
+  <button class="sound-hint" id="sound-hint">🔈 Click anywhere to enable sound · M mutes · F for fullscreen</button>
+
+  <script type="module" src="/js/screen.js"></script>
+</body>
+</html>

@@ -643,13 +643,24 @@ async function downloadContact(code, contactName) {
   const c = link.contact || {};
   if (/Android/i.test(navigator.userAgent || '') && c.phone) {
     const enc = encodeURIComponent;
-    toast('📇 Opening your contacts — just tap Save', 4000);
     location.href =
       `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact` +
       `;S.name=${enc(c.name)};S.phone=${enc(c.phone)}` +
       (c.company ? `;S.company=${enc(c.company)}` : '') +
       (c.notes ? `;S.notes=${enc(c.notes)}` : '') +
       `;S.browser_fallback_url=${enc(vcfUrl)};end`;
+    // Chrome may open the editor (done — just Save), or fall back to downloading the card:
+    // Android never lets a page open a download by itself, so point at Chrome's Open button.
+    setTimeout(() => {
+      if (document.hidden) return; // the contacts editor took over — nothing to explain
+      modal({
+        title: '📇 One more tap',
+        html: `<p class="fine">If your <b>Contacts</b> app is open — just tap <b>Save</b> there.</p>
+          <p class="fine">If you saw <b>“File downloaded”</b> at the top instead: tap <b>Open</b> on that bar, then <b>Save</b>. That's the contact (${esc(c.name)}).</p>`,
+        ok: 'Got it',
+        cancel: 'Close',
+      }).catch(() => {});
+    }, 1200);
     return;
   }
   toast('📇 Opening the contact — tap Save / Create contact', 4500);

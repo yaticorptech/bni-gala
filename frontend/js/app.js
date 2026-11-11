@@ -247,25 +247,11 @@ function gameCardHtml(g, mode = 'solo') {
 const ordinal = (n) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`;
 const roundActive = () => Boolean(S.round && (S.round.status === 'countdown' || S.round.status === 'running'));
 
-/** The team home card: create/join when teamless; code, members and standings once in one. */
+/** The team home card — shown only to members already in one (the create/join pitch is off for this event). */
 function teamCardHtml() {
   const brief = S.me.team;
   const det = S.me.teamDetail;
-  if (!brief || !det) {
-    return `
-    <section class="card team-card" id="team-card" style="--accent:#64748b">
-      <div>
-        <div class="eyebrow">👥 Team games</div>
-        <h3>Play as a team!</h3>
-        <p class="fine">Create a team and share its code, or join a friend's team with theirs. Team games score for the team board — and the Tap Battle needs you in one!</p>
-        <div class="team-actions">
-          <button class="btn btn-gold" id="team-create">＋ Create a team</button>
-          <button class="btn" id="team-joincode">Join with a code</button>
-          <button class="btn btn-ghost" id="team-browse">View teams</button>
-        </div>
-      </div>
-    </section>`;
-  }
+  if (!brief || !det) return '';
   const members = det.members
     .map((m) => `<span class="member-chip ${m.id === S.me.player.id ? 'me' : ''}">${esc(m.name.split(' ')[0])}${det.isCaptain && m.id === S.me.player.id ? ' ⭐' : ''}</span>`)
     .join('');

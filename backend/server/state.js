@@ -497,28 +497,31 @@ class GameState extends EventEmitter {
   /**
    * A connected member's contact as a vCard, for "save their number to my phone". The number
    * is only shared with members this player has actually connected with — showing your QR at
-   * the table is the consent.
+   * the table is the consent. The saver types the name; the contact is always saved with a
+   * "BNI <chapter>" prefix so every member found tonight groups together in the phone.
    */
-  contactCard(player, code) {
+  contactCard(player, code, customName = '') {
     const other = this.playerByConnectCode(code);
     if (!other) throw new HttpError(404, 'No member found for that code');
     const att = this.networkAttempt(player.id);
     if (!att || !att.meta.met.includes(other.id)) {
       throw new HttpError(403, 'Connect with them first — then you can save their contact', 'NOT_CONNECTED');
     }
+    const typed = clean(customName, 40) || other.name;
+    const display = ['BNI', other.chapter, typed].filter(Boolean).join(' ');
     const esc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, '\\$&').replace(/\r?\n/g, '\\n');
-    const note = [other.chapter && `${other.chapter}`, `Met at ${this.settings.eventTitle}`].filter(Boolean).join(' · ');
+    const note = [other.name, other.chapter, `Met at ${this.settings.eventTitle}`].filter(Boolean).join(' · ');
     const vcf = [
       'BEGIN:VCARD',
       'VERSION:3.0',
-      `N:;${esc(other.name)};;;`,
-      `FN:${esc(other.name)}`,
+      `N:;${esc(display)};;;`,
+      `FN:${esc(display)}`,
       other.phone && `TEL;TYPE=CELL:+91${other.phone}`,
       other.business && `ORG:${esc(other.business)}`,
       `NOTE:${esc(note)}`,
       'END:VCARD',
     ].filter(Boolean).join('\r\n');
-    return { name: other.name, vcf };
+    return { name: display, vcf };
   }
 
   /**

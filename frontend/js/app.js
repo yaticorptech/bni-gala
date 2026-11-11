@@ -588,7 +588,7 @@ function renderConnect() {
             .map(
               (m) => `<div class="cx-met-row">
                 <span class="cx-met-who">${m.emoji || '🤝'} <b>${esc(m.name)}</b><small>${esc([m.business, m.chapter].filter(Boolean).join(' · '))}</small></span>
-                <button class="btn btn-sm" data-save="${m.code}" data-name="${esc(m.name)}">📇 Save</button>
+                <button class="btn btn-sm" data-save="${m.code}" data-name="${esc(m.name)}" data-chapter="${esc(m.chapter || '')}">📇 Save</button>
               </div>`,
             )
             .join('')}</div>`
@@ -602,20 +602,40 @@ function renderConnect() {
   const scan = $('#cx-scan');
   if (scan) scan.onclick = () => scanFlow().catch(() => {});
   $('#view-connect').querySelectorAll('[data-save]').forEach((b) => {
-    b.addEventListener('click', () => saveContact(b.dataset.save, b.dataset.name));
+    b.addEventListener('click', () => saveContact(b.dataset.save, b.dataset.name, b.dataset.chapter));
   });
 }
 
 /**
- * "Save their number to my phone": fetch the member's vCard (only works once connected) and
- * hand it to the phone — the share sheet where it exists (iOS/Android show "Save to
- * Contacts"), otherwise a .vcf download the phone opens into its contacts app.
+ * "Save their number to my phone": ask what to call them (the "BNI <chapter>" prefix is
+ * fixed, the name is the saver's to type), then fetch the vCard and hand it over.
  */
-async function saveContact(code, name) {
+async function saveContact(code, name, chapter) {
+  const prefix = ['BNI', chapter].filter(Boolean).join(' ');
+  const picked = await modal({
+    title: '📇 Save to contacts',
+    html: `<label class="field"><span>Save the name as</span>
+        <input name="cname" value="${esc(name)}" maxlength="40" autocomplete="off"></label>
+      <p class="fine">Goes into your phone as <b>${esc(prefix)} ‹name›</b> — edit the name if you like.</p>`,
+    ok: '📇 Save contact',
+    cancel: 'Cancel',
+  });
+  if (!picked) return;
+  return downloadContact(code, (picked.cname || '').trim() || name);
+}
+
+/**
+ * Fetch the member's vCard (only works once connected) and hand it to the phone — the share
+ * sheet where it exists (iOS/Android show "Save to Contacts"), otherwise a .vcf download the
+ * phone opens into its contacts app. The server composes the final "BNI <chapter> <name>".
+ */
+async function downloadContact(code, contactName) {
   let blob;
+  let name = contactName;
   try {
-    const res = await fetch(apiUrl(`/api/contact/${encodeURIComponent(code)}`), { headers: { authorization: `Bearer ${getToken()}` } });
+    const res = await fetch(apiUrl(`/api/contact/${encodeURIComponent(code)}?name=${encodeURIComponent(contactName)}`), { headers: { authorization: `Bearer ${getToken()}` } });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not fetch the contact');
+    name = (res.headers.get('content-disposition')?.match(/filename="(.+)\.vcf"/) || [])[1] || contactName; // "BNI <chapter> <name>"
     blob = new Blob([await res.text()], { type: 'text/vcard' });
   } catch (err) {
     return toast(err.message);
@@ -661,13 +681,9 @@ async function submitConnect(raw) {
     toast(`🔗 Connected with ${r.other.name}! +${fmt(r.points)} for you both`, 4000);
   }
   if (!r.already && r.other.code) {
-    // offer to save their number right away (also available later from the met list)
-    modal({
-      title: `📇 Save ${esc(first)}’s number?`,
-      html: `<p class="fine">Add ${esc(r.other.name)}${r.other.business ? ` · ${esc(r.other.business)}` : ''} to your phone’s contacts — that’s what networking is for!</p>`,
-      ok: '📇 Save contact',
-      cancel: 'Later',
-    }).then((ok) => ok && saveContact(r.other.code, r.other.name));
+    // offer to save their number right away (also available later from the met list);
+    // the dialog's name field doubles as the ask — Cancel just skips it
+    saveContact(r.other.code, r.other.name, r.other.chapter).catch(() => {});
   }
   if (S.view === 'connect') {
     try {

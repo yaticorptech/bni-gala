@@ -65,9 +65,10 @@ cd backend && npm run simulate -- --players 20
   phone camera app (the QR is a link that opens the game and connects by itself) — or type
   their code, and you **both** get 50 points. Each pair counts once; up to 1,000 points
   (20 real connections). Pairings are validated server-side and show on the big-screen feed.
-  Once connected, either member can **save the other's number to their phone** in one tap
-  (a vCard with name, number, business and chapter) — the number is only ever shared with
-  members you've actually connected with.
+  Once connected, either member can **save the other's number to their phone**: they type
+  the name (prefilled) and it's saved as **"BNI \<chapter\> \<name\>"** — a vCard with the
+  number, business, and the real name + chapter in the notes. The number is only ever
+  shared with members you've actually connected with.
 - **Hosted moments** (from `/admin`): **Team Tap Battle** rounds (taps are their own
   score, shown as the battle overlay), **Live Quiz** (counts on the individual board),
   **lucky draw**, and the **grand reveal** of the top solo players.

@@ -82,8 +82,9 @@ module.exports = function createRoutes(state, { connections, storage }) {
 
   // A connected member's contact as a vCard — "save their number to my phone". Only for
   // members the caller has actually connected with (state.contactCard enforces it).
+  // ?name=… is what the saver typed; the server prefixes it with "BNI <chapter>".
   r.get('/contact/:code', playerAuth, (req, res) => {
-    const { name, vcf } = state.contactCard(req.player, req.params.code);
+    const { name, vcf } = state.contactCard(req.player, req.params.code, req.query.name);
     res
       .type('text/vcard; charset=utf-8')
       .set('Content-Disposition', `attachment; filename="${name.replace(/[^\w .-]/g, '')}.vcf"`)

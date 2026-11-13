@@ -146,8 +146,8 @@ function renderJoin() {
         <button class="btn btn-primary btn-lg" type="submit" ${canSubmit ? '' : 'disabled'}>${login ? 'Log in →' : 'Let’s play →'}</button>
         <p class="fine center">${login ? 'Use the mobile number you registered with' : canSubmit ? `${S.games.filter((g) => !g.hosted && !g.bonus).length} quick games · solo and team play · watch the big screen!` : 'Registration opens once the organiser adds the chapter list — hang tight!'}</p>
       </form>
-      ${sponsorsHtml()}
-    </div>`;
+    </div>
+    ${sponsorsHtml()}`;
 
   $('#view-join').querySelectorAll('[data-tab]').forEach((b) =>
     b.addEventListener('click', () => {

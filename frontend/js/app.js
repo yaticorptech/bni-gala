@@ -682,20 +682,20 @@ async function doSpin() {
   sfx.whoosh(); // the wheel takes off
   vibrate(20);
   const wedges = res.wedges || SPIN_FALLBACK;
-  // Six full turns over 6 seconds (the CSS transition), stopping with the winning wedge's
-  // centre under the pointer.
-  $('#spin-wheel').style.transform = `rotate(${360 * 6 - (res.index + 0.5) * (360 / wedges.length)}deg)`;
+  // Eight full turns over 10 seconds (the CSS transition), stopping with the winning
+  // wedge's centre under the pointer.
+  $('#spin-wheel').style.transform = `rotate(${360 * 8 - (res.index + 0.5) * (360 / wedges.length)}deg)`;
   // The flapper clicks along with the wheel — a burst of fast ticks that slows as it does.
   const t0 = performance.now();
   let gap = 45;
-  while (performance.now() - t0 < 4500) {
+  while (performance.now() - t0 < 8200) {
     sfx.tick();
-    if (gap > 160) vibrate(5); // feel the last few clicks
+    if (gap > 200) vibrate(5); // feel the last few clicks
     await sleep(gap);
-    gap = Math.min(400, gap * 1.09);
+    gap = Math.min(480, gap * 1.055);
   }
-  sfx.drumroll(1.3); // suspense as it creeps onto the winning wedge
-  await sleep(1500);
+  sfx.drumroll(1.5); // suspense as it creeps onto the winning wedge
+  await sleep(1800);
   const isPts = /^\d+$/.test(String(res.prize));
   sfx.jackpot(); // the loudest moment of the night — cymbal, brass, applause, glitter
   vibrate([80, 50, 80, 50, 180]);

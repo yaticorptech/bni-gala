@@ -705,12 +705,15 @@ async function doSpin() {
   // The big moment gets a pop-up of its own: what they won, front and centre.
   await sleep(500);
   const logo = isPts ? null : prizeLogo(res.prize);
+  const first = S.me.player.name.split(' ')[0];
   await modal({
-    title: '🎉 Congratulations!',
+    title: `🎉 Congratulations, ${esc(first)}!`,
     html: `<div class="win-pop">
         ${logo ? `<img class="win-pop-logo" src="${esc(logo)}" alt="" onerror="this.outerHTML='<div class=win-pop-emoji>🎁</div>'">` : `<div class="win-pop-emoji">${isPts ? '🪙' : '🎁'}</div>`}
         <div class="win-pop-prize">${isPts ? `+${fmt(res.prize)} points` : esc(res.prize)}</div>
-        <p class="fine center">${isPts ? 'Added straight to your score — well spun!' : 'Your gift is saved on your profile ticket — show it at the prize desk to collect it!'}</p>
+        <p class="fine center">${isPts
+          ? `You won <b>+${fmt(res.prize)} points</b> — straight onto your score!`
+          : `You won a <b>${esc(res.prize)} gift voucher</b>! It's saved on your profile ticket — show it at the prize desk to collect.`}</p>
       </div>`,
     ok: 'Let’s play →',
     cancel: false,

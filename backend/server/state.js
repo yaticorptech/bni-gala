@@ -166,7 +166,7 @@ class GameState extends EventEmitter {
     if (!Number.isInteger(s.maxTeamSize) || s.maxTeamSize < 2 || s.maxTeamSize > 50) s.maxTeamSize = 5;
     if (!Number.isInteger(s.teamAttemptsPerGame) || s.teamAttemptsPerGame < 0 || s.teamAttemptsPerGame > 50) s.teamAttemptsPerGame = 2;
     s.liveQuiz = (Array.isArray(s.liveQuiz) ? s.liveQuiz : []).filter((q) => q && typeof q.q === 'string' && Array.isArray(q.options) && (Number.isInteger(q.answer) || q.answer === null));
-    s.spinWedges = (Array.isArray(s.spinWedges) && s.spinWedges.length ? s.spinWedges : defaultSettings().spinWedges).map(normWedge).filter((w) => w.label);
+    s.spinWedges = defaultSettings().spinWedges; // locked to the list in server/games.js, whatever an old database says
     // Games added in an update start enabled, without undoing games the admin switched off.
     const saved = data.settings || {};
     const known = new Set(Array.isArray(saved.knownGames) ? saved.knownGames : GAMES.map((g) => g.id));
@@ -303,11 +303,9 @@ class GameState extends EventEmitter {
     }
     if ('networkOpen' in patch) s.networkOpen = Boolean(patch.networkOpen);
     if ('spinWedges' in patch) {
-      if (!Array.isArray(patch.spinWedges)) throw new HttpError(400, 'spinWedges must be a list');
-      // A prize is a plain number (points), a gift name ("Mug"), or a gift with stock ("Mug x25").
-      const wedges = patch.spinWedges.map(normWedge).filter((w) => w.label);
-      if (wedges.length < 2 || wedges.length > 12) throw new HttpError(400, 'The wheel needs 2 to 12 prizes, up to 14 characters each (add stock like "Mug x25")');
-      s.spinWedges = wedges;
+      // The event's gift wheel is LOCKED: it lives in server/games.js and nothing at runtime
+      // — not even the admin — can change it. Guarantees the 250 physical gifts stay honest.
+      throw new HttpError(400, 'The gift wheel is locked for this event — it can only be changed in the code');
     }
     this.persist('saveSettings', s);
     this.emit('settings', this.publicSettings());

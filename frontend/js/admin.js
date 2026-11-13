@@ -84,10 +84,9 @@ function renderControls() {
       <div class="ctl-body"><select id="tries">${triesOpts}</select></div>
     </div>
     <div class="ctl">
-      <div class="ctl-label">Spin &amp; Win wheel<small>2 to 12 prizes, comma separated. A plain number is points; a gift name goes on the winner's profile ticket; add stock like "Mug x25" — the draw is weighted by what's left and a gift can never run out of stock.</small></div>
+      <div class="ctl-label">Spin &amp; Win wheel<small>🔒 Locked for this event — the gift list is fixed in the code. The draw is weighted by remaining stock, so no gift can ever be won more times than you have units.</small></div>
       <div class="ctl-body">
-        <input class="txt" id="spin-wedges" value="${esc((s.spinWedges || []).map((w) => (typeof w === 'object' ? (w.stock ? `${w.label} x${w.stock}` : w.label) : w)).join(', '))}" placeholder="Mug x25, T-shirt x10, 100">
-        <button class="btn" id="spin-wedges-btn">Save wheel</button>
+        ${(s.spinWedges || []).map((w) => `<span class="chip">${esc(typeof w === 'object' ? (w.stock ? `${w.label} ×${w.stock}` : w.label) : String(w))}</span>`).join('')}
         ${data.spinStock?.length ? `<p class="fine">🎁 Left to win: ${data.spinStock.map((x) => `<b>${esc(x.label)}</b> ${x.left}/${x.stock}`).join(' · ')}</p>` : ''}
       </div>
     </div>
@@ -158,7 +157,6 @@ function renderControls() {
     act(() => call('/api/admin/reveal', { method: 'POST', body: { count: n } }), '🏆 Reveal started on the big screen');
   };
   $('#tries').onchange = (e) => saveSettings({ attemptsPerGame: Number(e.target.value) });
-  $('#spin-wedges-btn').onclick = () => saveSettings({ spinWedges: $('#spin-wedges').value.split(',').map((x) => x.trim()).filter(Boolean) }, '🎡 Wheel saved');
   c.querySelectorAll('[data-net]').forEach((b) =>
     b.addEventListener('click', () => saveSettings({ networkOpen: b.dataset.net === '1' }, b.dataset.net === '1' ? '🔗 Power Connections is ON' : '⏹ Power Connections stopped')),
   );

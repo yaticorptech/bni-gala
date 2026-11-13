@@ -14,6 +14,8 @@ let revealing = false;
 let shownRevealAt = null;
 let feedSeeded = false;
 let bannerQueue = Promise.resolve();
+let lastJackpot = 0; // the wheel's win sound on the big speakers, at most once every few seconds
+let music = null; // looping background track, when frontend/music.mp3 exists
 // Sidebar panels that currently have something to show; they take turns every 12 s. While
 // anyone is mid-game, "Playing right now" holds the slot two turns out of three: for most
 // guests it's the only place they see themselves on the big screen while they play.
@@ -313,7 +315,18 @@ function addActivity(a, animate = true) {
   if (animate) {
     // Every finished game gets a chime (higher score, higher note); a new best or fastest finger sparkles.
     if (a.fastest) sfx.sparkle();
-    else if (a.with) {
+    else if (a.gameId === 'spin' && a.prize && !/^\d+$/.test(String(a.prize))) {
+      // A gift won on the wheel: the room hears the jackpot (throttled so a rush of
+      // arrivals spinning together doesn't become a wall of brass).
+      const now = Date.now();
+      if (now - lastJackpot > 5000) {
+        lastJackpot = now;
+        sfx.jackpot();
+      } else {
+        sfx.bonus();
+        sfx.sparkle(0.2);
+      }
+    } else if (a.with) {
       sfx.bonus(); // two members just connected — a cheerful double note of its own
       sfx.sparkle(0.2);
     } else {
@@ -1161,8 +1174,35 @@ function loadSponsors() {
     .catch(() => {});
 }
 
+/** A looping background track: drop a file at frontend/music.mp3 and the ♫ button appears. */
+async function setupMusic() {
+  try {
+    const r = await fetch('/music.mp3', { method: 'HEAD' });
+    if (!r.ok) return;
+  } catch {
+    return;
+  }
+  const btn = $('#music-btn');
+  btn.classList.remove('hidden');
+  btn.onclick = () => {
+    if (!music) {
+      music = new Audio('/music.mp3');
+      music.loop = true;
+      music.volume = 0.3; // under the game sounds, never over them
+    }
+    if (music.paused) {
+      music.play().catch(() => {});
+      btn.textContent = '⏸ ♫ music';
+    } else {
+      music.pause();
+      btn.textContent = '▶ ♫ music';
+    }
+  };
+}
+
 async function boot() {
   loadSponsors();
+  setupMusic();
   const st = await api('/api/state');
   games = st.games;
   setHeader(st.settings);

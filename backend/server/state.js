@@ -1417,11 +1417,22 @@ class GameState extends EventEmitter {
       chapterMap.set(r.chapter.toLowerCase(), c);
     }
 
+    // The room's best networkers — counts, not points, straight from the connections map.
+    const topConnectors = [...connections.entries()]
+      .map(([pid, n]) => {
+        const p = this.players.get(pid);
+        return p ? { ...publicPlayer(p), count: n } : null;
+      })
+      .filter(Boolean)
+      .sort((x, y) => y.count - x.count)
+      .slice(0, 5);
+
     const result = {
       ranked,
       rankById: new Map(ranked.map((r) => [r.id, r])),
       leaders: GAMES.filter((g) => !g.bonus).map((g) => ({ gameId: g.id, ...(leaders[g.id] || {}) })), // no "champion" of a luck bonus
       chapters: [...chapterMap.values()].sort((x, y) => y.total - x.total),
+      topConnectors,
       plays: finished.length,
     };
     if (includeLive) this.cache = result;
@@ -1461,6 +1472,7 @@ class GameState extends EventEmitter {
       race: raceMode ? race.map((g) => g.id) : null,
       leaders: board.leaders,
       chapters: board.chapters.slice(0, 8),
+      connectors: board.topConnectors,
       // The group-games race: top teams by points from the team games.
       teamsBoard: this.teamBoard().ranked.slice(0, 8).map(({ rank, id, name, emoji, color, chapter, members, total, plays }) => ({ rank, id, name, emoji, color, chapter, members, total, plays })),
       recent: this.recent.slice(0, 8),

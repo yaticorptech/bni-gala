@@ -17,7 +17,7 @@ let bannerQueue = Promise.resolve();
 // Sidebar panels that currently have something to show; they take turns every 12 s. While
 // anyone is mid-game, "Playing right now" holds the slot two turns out of three: for most
 // guests it's the only place they see themselves on the big screen while they play.
-const panels = { playing: false, champions: true, chapters: false, teams: false };
+const panels = { playing: false, champions: true, connectors: false, chapters: false, teams: false };
 let panelIndex = 0;
 // Team Tap Battle
 let battleTeams = []; // [{ id, name, color, emoji, members, total, wins }] best first (taps)
@@ -224,6 +224,19 @@ function renderChampions(leaders) {
         })
         .join('')
     : '<li class="champ-empty">Champions appear as games are played…</li>';
+}
+
+/** Top 5 networkers — connection counts, the social side of the night. */
+function renderConnectors(list) {
+  panels.connectors = list.length > 0;
+  $('#connectors').innerHTML = list
+    .map(
+      (c, i) => `<li><span class="crk">${MEDALS[i] || i + 1}</span>
+      <span class="cn"><b>${withEmoji(c)}</b><small>${esc([c.business, c.chapter].filter(Boolean).join(' · '))}</small></span>
+      <span class="cs">${fmt(c.count)} 🤝</span></li>`,
+    )
+    .join('');
+  syncPanels();
 }
 
 function renderChapters(chapters) {
@@ -1157,6 +1170,7 @@ function onBoard(p) {
   renderBoard(p.top || []);
   renderPlaying(p.playing || []);
   renderChampions(p.leaders || []);
+  renderConnectors(p.connectors || []);
   renderChapters(p.chapters || []);
   if (!feedSeeded) {
     feedSeeded = true;

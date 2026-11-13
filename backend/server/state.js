@@ -365,7 +365,9 @@ class GameState extends EventEmitter {
     const chapter = clean(body.chapter, 40);
     if (!this.settings.chapters.length) throw new HttpError(400, 'Registration isn’t open yet — the organiser hasn’t added the chapter list');
     if (!this.settings.chapters.includes(chapter)) throw new HttpError(400, 'Please pick your chapter from the list');
-    return this.addPlayer({ name, business: clean(body.business, 60), chapter, phone, emoji });
+    const business = clean(body.business, 60);
+    if (!business) throw new HttpError(400, 'Please enter your business / category');
+    return this.addPlayer({ name, business, chapter, phone, emoji });
   }
 
   setEmoji(player, emoji) {

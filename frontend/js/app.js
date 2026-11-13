@@ -119,16 +119,16 @@ function renderJoin() {
   const s = S.settings;
   const login = S.joinTab !== 'register';
   const canSubmit = login || s.chapters.length > 0; // registering needs the chapter dropdown filled in
+  const phoneField = `<label class="field"><span>Your mobile number *</span>
+        <input name="phone" type="tel" inputmode="numeric" autocomplete="tel" required maxlength="10" pattern="[0-9]{10}" placeholder="10-digit number" value="${esc(S.prefillPhone)}"></label>`;
   const fields = login
-    ? `<label class="field"><span>Your mobile number *</span>
-        <input name="phone" type="tel" inputmode="numeric" autocomplete="tel" required maxlength="16" placeholder="10-digit number" value="${esc(S.prefillPhone)}"></label>`
+    ? phoneField
     : `${chapterFieldHtml()}
       <label class="field"><span>Your name *</span>
         <input name="name" required minlength="2" maxlength="40" placeholder="e.g. Priya Sharma" autocomplete="name"></label>
-      <label class="field"><span>Your mobile number *</span>
-        <input name="phone" type="tel" inputmode="numeric" autocomplete="tel" required maxlength="16" placeholder="10-digit number" value="${esc(S.prefillPhone)}"></label>
-      <label class="field"><span>Business / category</span>
-        <input name="business" maxlength="60" placeholder="e.g. Interior Designer" autocomplete="organization"></label>`;
+      ${phoneField}
+      <label class="field"><span>Business / category *</span>
+        <input name="business" required maxlength="60" placeholder="e.g. Interior Designer" autocomplete="organization"></label>`;
   $('#view-join').innerHTML = `
     <div class="hero">
       <div class="hero-badge">🏆</div>
@@ -157,13 +157,21 @@ function renderJoin() {
     }),
   );
 
+  // Digits only in the phone box, 10 at most — whatever gets typed or pasted.
+  const phoneInput = $('#join-form input[name=phone]');
+  phoneInput.addEventListener('input', () => {
+    const digits = phoneInput.value.replace(/\D/g, '').slice(0, 10);
+    if (phoneInput.value !== digits) phoneInput.value = digits;
+  });
+
   const form = $('#join-form');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(form));
-    if (String(body.phone || '').replace(/\D/g, '').length < 10) return toast('Please enter your 10-digit mobile number');
+    if (!/^\d{10}$/.test(String(body.phone || ''))) return toast('Please enter your 10-digit mobile number');
     if (!login && String(body.name || '').trim().length < 2) return toast('Please enter your name');
     if (!login && String(body.chapter || '').trim().length < 2) return toast('Please select your BNI chapter');
+    if (!login && !String(body.business || '').trim()) return toast('Please enter your business / category');
     if (login) body.loginOnly = true;
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
@@ -555,11 +563,14 @@ function spinWheelSvg(wedges) {
   const R = 85; // wedge radius inside the rim
   const slice = (i) =>
     `<path d="M100 100 L${pt(R, i * step)} A${R} ${R} 0 ${step > 180 ? 1 : 0} 1 ${pt(R, (i + 1) * step)} Z" fill="${color(i)}" stroke="#fff" stroke-width="1.1"/>`;
-  // The label runs along the wedge, centre to rim, sized to fit its length and the wedge's width.
+  // The label runs along the wedge, centre to rim. Its size respects both the radial room
+  // for its length AND the wedge's width where the text begins, so neighbours never overlap.
   const label = (w, i) => {
     const text = String(w);
-    const fs = Math.max(5.8, Math.min(13, 92 / Math.max(4, text.length), step / 3.2));
-    return `<text transform="rotate(${i * step + step / 2 - 90} 100 100)" x="122" y="100" dominant-baseline="middle" text-anchor="start" style="font-size:${fs.toFixed(1)}px">${esc(text)}</text>`;
+    const startR = 30; // distance from the hub where the text starts
+    const halfWidth = startR * Math.sin((Math.PI * step) / 360); // wedge half-width there
+    const fs = Math.max(5.2, Math.min(12, 80 / Math.max(4, text.length), halfWidth * 1.35));
+    return `<text transform="rotate(${i * step + step / 2 - 90} 100 100)" x="${100 + startR}" y="100" dominant-baseline="middle" text-anchor="start" style="font-size:${fs.toFixed(1)}px">${esc(text)}</text>`;
   };
   const bulbs = Array.from({ length: 16 }, (_, i) => {
     const [cx, cy] = pt(92.5, i * 22.5).split(' ');

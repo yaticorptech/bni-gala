@@ -339,7 +339,7 @@ const GAMES = [
     bonus: true,
     // The event's wheel — 250 gifts for 250 guests. Also the default for a fresh database,
     // so a redeploy or reset can never fall back to anything else. Editable live in /admin.
-    wedges: ['Digital Planet x25', 'Frameit x5', 'Modicare x20', 'Nandi Oil x10', 'Presto x10', 'DayToday x20', 'Abhekhya Twam x10', 'Yaticorp x10', 'Hangyo x140'],
+    wedges: ['Digital Planet x25', 'Frameit x5', 'Modicare x20', 'Nandi Oil x10', 'Presto x10', 'DayToday x14', 'Abhekhya Twam x10', 'Yaticorp x10', 'Hangyo x146'],
     minMs: 0,
     score() {
       throw new HttpError(403, 'The welcome spin is credited by the server', 'BONUS');

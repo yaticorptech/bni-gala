@@ -285,7 +285,7 @@ function feedItem(a) {
     : a.with
     ? `<span class="fe">🔗</span><span class="ft"><b>${esc(a.name)}</b> connected with <b>${esc(a.with)}</b> 🤝${a.count ? ` · <b>${fmt(a.count)}</b> built` : ''}</span>`
     : a.gameId === 'spin' && a.prize && !/^\d+$/.test(String(a.prize))
-    ? `<span class="fe">🎡</span><span class="ft"><b>${esc(a.name)}</b> won <b>${esc(a.prize)}</b> on the wheel 🎁</span>`
+    ? `<span class="fe">🎡</span><span class="ft"><b>${esc(a.name)}</b> won a <b>${esc(a.prize)}</b> gift on the wheel 🎁</span>`
     : `<span class="fe">${g?.emoji || '🎮'}</span>
     <span class="ft"><b>${esc(a.name)}</b> scored <b>${fmt(a.score)}</b> in ${esc(g?.name || '')}${a.team ? ` for ${a.team.emoji} ${esc(a.team.name)}` : ''}</span>
     ${a.improved ? '<em>NEW BEST</em>' : ''}`;

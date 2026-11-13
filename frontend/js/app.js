@@ -5,17 +5,14 @@ import memory from './games/memory.js';
 import colors from './games/colors.js';
 import pictionary from './games/pictionary.js';
 import simon from './games/simon.js';
-import odd from './games/odd.js';
 import frenzy from './games/frenzy.js';
 import math from './games/math.js';
 import timing from './games/timing.js';
 import hunt from './games/hunt.js';
 import balloons from './games/balloons.js';
 import bullseye from './games/bullseye.js';
-import cups from './games/cups.js';
-import higher from './games/higher.js';
 
-const MODULES = { rush, reflex, memory, colors, pictionary, simon, odd, frenzy, math, timing, hunt, balloons, bullseye, cups, higher };
+const MODULES = { rush, reflex, memory, colors, pictionary, simon, frenzy, math, timing, hunt, balloons, bullseye };
 const VIEWS = ['boot', 'join', 'hub', 'game', 'result', 'tap', 'quiz', 'spin', 'connect', 'profile'];
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -1386,15 +1383,12 @@ function metaLine(gameId, m) {
     case 'colors': return `${m.correct} right · ${m.wrong} wrong`;
     case 'pictionary': return `${m.correct} of ${m.total} professions guessed`;
     case 'simon': return m.level ? `Sequence of ${m.level} completed` : 'Slipped on the first pad — next time!';
-    case 'odd': return `${m.correct} spotted · ${m.wrong} wrong`;
     case 'frenzy': return `${m.taps} taps · ${m.perSec} a second`;
     case 'math': return `${m.correct} right · ${m.wrong} wrong`;
     case 'timing': return `Average ${m.avgOffMs} ms off target · best ${m.bestOffMs} ms`;
     case 'hunt': return m.completed ? `All 20 found in ${(m.timeMs / 1000).toFixed(1)} seconds${m.wrong ? ` · ${m.wrong} wrong tap${m.wrong > 1 ? 's' : ''}` : ''}` : `${m.found}/20 before time ran out`;
     case 'balloons': return `🎈 ${m.popped} popped · ⭐ ${m.golden} golden`;
     case 'bullseye': return `🎯 ${m.bulls} bullseye${m.bulls === 1 ? '' : 's'} · average ${m.avgOff} off centre`;
-    case 'cups': return `💰 Found it ${m.correct} of ${m.rounds} times`;
-    case 'higher': return `${m.correct} right · ${m.wrong} wrong${m.streak >= 3 ? ` · best streak ×${m.streak}` : ''}`;
     default: return '';
   }
 }

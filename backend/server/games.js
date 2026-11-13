@@ -266,23 +266,6 @@ const GAMES = [
     },
   },
   {
-    id: 'odd',
-    name: 'Odd One Out',
-    emoji: '🔍',
-    color: '#84cc16',
-    tagline: 'One emoji is different — spot it!',
-    duration: '30 sec',
-    howTo: ['A grid of look-alike emojis — one is different', 'Tap the odd one out (+35)', 'Wrong taps cost 15 · the grids get bigger and sneakier'],
-    minMs: 28000,
-    score(r) {
-      // 29 right already scores 1000; the cap only rules out machine-speed tapping.
-      const correct = count(r.correct, 100, 'correct');
-      const wrong = count(r.wrong, 100, 'wrong');
-      if (correct + wrong > 100) throw invalid('too many answers');
-      return { score: clamp(correct * 35 - wrong * 15, 0, MAX), meta: { correct, wrong } };
-    },
-  },
-  {
     id: 'pictionary',
     name: 'Emoji Pictionary',
     emoji: '🎭',
@@ -378,37 +361,6 @@ const GAMES = [
       const offsets = r.offsets.map((o) => count(o, 50, 'offset')); // distance from centre, 0–50
       const pts = offsets.reduce((s, o) => s + (o <= 3 ? 100 : clamp(Math.round(100 - o * 2.5), 0, 95)), 0);
       return { score: clamp(pts, 0, MAX), meta: { bulls: offsets.filter((o) => o <= 3).length, avgOff: Math.round(offsets.reduce((a, b) => a + b, 0) / offsets.length) } };
-    },
-  },
-  {
-    id: 'cups',
-    name: 'Follow the Lead',
-    emoji: '💼',
-    color: '#14b8a6',
-    tagline: 'Which briefcase hides the lead? Keep watching!',
-    duration: '5 rounds',
-    howTo: ['A 💰 lead goes under one of three briefcases', 'They shuffle — keep your eye on the right one', 'Tap where it ended up · +200 a find · 5 rounds'],
-    minMs: 12000,
-    score(r) {
-      const correct = count(r.correct, 5, 'correct');
-      return { score: clamp(correct * 200, 0, MAX), meta: { correct, rounds: 5 } };
-    },
-  },
-  {
-    id: 'higher',
-    name: 'Higher or Lower',
-    emoji: '🃏',
-    color: '#6366f1',
-    tagline: 'Call the next card — higher or lower?',
-    duration: '30 sec',
-    howTo: ['A card shows — will the next one be higher or lower?', 'Right +60 · wrong −20', 'Aces are low, kings are high — play the odds!'],
-    minMs: 28000,
-    score(r) {
-      const correct = count(r.correct, 40, 'correct');
-      const wrong = count(r.wrong, 40, 'wrong');
-      const streak = count(r.streak ?? 0, 40, 'streak'); // cosmetic, for the result line
-      if (correct + wrong > 40) throw invalid('too many answers');
-      return { score: clamp(correct * 60 - wrong * 20, 0, MAX), meta: { correct, wrong, streak } };
     },
   },
   {

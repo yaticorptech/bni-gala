@@ -39,7 +39,7 @@ const LIVE_GRACE_MS = 1500; // network allowance after the timer hits zero
 const EMOJIS = ['🦁', '🐯', '🦊', '🐼', '🐨', '🦄', '🐸', '🐙', '🦋', '🌟', '🔥', '⚡', '🚀', '🎯', '🏆', '💎', '🍕', '☕', '🎸', '🎲', '🧠', '💼', '🤝', '😎'];
 const validEmoji = (e) => (EMOJIS.includes(e) ? e : '');
 
-const DEFAULT_TEAM_GAMES = ['frenzy', 'rush', 'colors', 'odd'];
+const DEFAULT_TEAM_GAMES = ['frenzy', 'rush', 'colors'];
 
 const defaultSettings = () => ({
   eventTitle: config.defaultTitle,

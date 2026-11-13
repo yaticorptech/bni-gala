@@ -925,13 +925,6 @@ const DEMOS = {
     };
     loop();
   },
-  odd(d) {
-    quizDemo(d, () => {
-      const pair = [['😀', '😎'], ['🐶', '🐱'], ['🍏', '🍐']][drand(3)];
-      const ci = drand(8);
-      return { cap: 'One is different — tap it!', options: Array.from({ length: 8 }, (_, i) => (i === ci ? pair[1] : pair[0])), correct: ci, grid: true };
-    });
-  },
   pictionary(d) {
     const P = [['🦷🪥', 'Dentist'], ['📸💒', 'Photographer'], ['🏠📐', 'Architect'], ['⚖️👔', 'Lawyer']];
     quizDemo(d, () => {
@@ -1033,61 +1026,6 @@ const DEMOS = {
         res.textContent = '🎯 BULLSEYE +100';
         d.T.after(loop, 1500);
       }, 300), 1700);
-    };
-    loop();
-  },
-  cups(d) {
-    d.screen.innerHTML = `<div class="dq-cap">Keep your eye on the 💰!</div><div class="dcup"><div class="dcup-m" style="--s:1">💰</div>${[0, 1, 2]
-      .map((i) => `<div class="dcup-c" style="--s:${i}">💼</div>`)
-      .join('')}</div>`;
-    const cs = [...d.screen.querySelectorAll('.dcup-c')];
-    const money = d.screen.querySelector('.dcup-m');
-    const win = cs[1]; // this case hides the money, wherever it slides to
-    const slot = (c) => Number(c.style.getPropertyValue('--s'));
-    const swap = (a, b, done) => {
-      const sa = slot(a);
-      a.style.setProperty('--s', slot(b));
-      b.style.setProperty('--s', sa);
-      d.T.after(done, 520);
-    };
-    const loop = () => {
-      cs.forEach((c) => c.classList.remove('up'));
-      money.style.setProperty('--s', slot(win));
-      money.classList.add('show');
-      win.classList.add('up');
-      d.T.after(() => {
-        win.classList.remove('up');
-        money.classList.remove('show');
-        d.T.after(() => swap(win, cs[0], () => swap(win, cs[2], () => {
-          d.T.after(() => demoTap(d.finger, win, d.T, () => {
-            money.style.setProperty('--s', slot(win));
-            money.classList.add('show');
-            win.classList.add('up');
-            demoFloat(d.screen, win, '+200', true);
-            d.T.after(loop, 1600);
-          }), 400);
-        })), 350);
-      }, 1000);
-    };
-    loop();
-  },
-  higher(d) {
-    const face = (v) => (v === 1 ? 'A' : v === 11 ? 'J' : v === 12 ? 'Q' : v === 13 ? 'K' : v);
-    d.screen.innerHTML = `<div class="dq-cap">Higher or lower?</div><div class="dhl"><b>8</b><span>♠</span></div>
-      <div class="dq-opts"><button class="dq-opt hi">⬆ HIGHER</button><button class="dq-opt lo">⬇ LOWER</button></div>`;
-    const card = d.screen.querySelector('.dhl');
-    let v = 8;
-    const loop = () => {
-      const goHi = v <= 7;
-      const btn = d.screen.querySelector(goHi ? '.hi' : '.lo');
-      d.T.after(() => demoTap(d.finger, btn, d.T, () => {
-        v = goHi ? v + 1 + drand(13 - v) : 1 + drand(v - 1);
-        const red = Math.random() < 0.5;
-        card.innerHTML = `<b>${face(v)}</b><span>${red ? '♥' : '♠'}</span>`;
-        card.classList.toggle('red', red);
-        demoFloat(d.screen, card, '+60');
-        d.T.after(loop, 900);
-      }), 650);
     };
     loop();
   },

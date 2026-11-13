@@ -524,91 +524,54 @@ function landHome() {
 }
 
 /**
- * The wheel, drawn like a casino roulette: copper rim with brass studs, red/black prize
- * pockets (one green when the count is odd, like the zero), a ring of green cells, a copper
- * bowl and the brass cross-handle turret. Wedge 0 starts at the top and they run clockwise,
- * matching the server's list.
+ * The prize wheel, carnival style: a gold rim ringed with twinkling bulbs, bright pie
+ * wedges, and each prize written along its wedge from the centre out — so gift names fit.
+ * Wedge 0 starts at the top and they run clockwise, matching the server's list.
  */
 function spinWheelSvg(wedges) {
-  const step = 360 / wedges.length;
+  const n = wedges.length;
+  const step = 360 / n;
   const pt = (r, deg) => {
     const a = ((deg - 90) * Math.PI) / 180;
     return `${(100 + r * Math.cos(a)).toFixed(2)} ${(100 + r * Math.sin(a)).toFixed(2)}`;
   };
-  /** An annulus segment between radii r0 (inner) and r1 (outer), from a0 to a1 degrees. */
-  const ring = (r0, r1, a0, a1, fill, stroke = '') =>
-    `<path d="M${pt(r1, a0)} A${r1} ${r1} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${pt(r1, a1)} L${pt(r0, a1)} A${r0} ${r0} 0 ${a1 - a0 > 180 ? 1 : 0} 0 ${pt(r0, a0)} Z" fill="${fill}" ${stroke}/>`;
-  const odd = wedges.length % 2 === 1;
-  const pocket = (i) => (odd && i === 0 ? '#1d8a44' : i % 2 ? '#15171e' : '#cf4028'); // odd count: wedge 0 is the green "zero"
-  // Prizes can be numbers or gift names — the label shrinks to fit its pocket's arc.
-  const arc = (2 * Math.PI * 73) / wedges.length;
-  const fsFor = (w) => Math.max(5.5, Math.min(wedges.length > 8 ? 10 : 12.5, (arc * 1.3) / Math.max(2, String(w).length)));
-  const slices = wedges
-    .map(
-      (w, i) => `${ring(62, 84, i * step, (i + 1) * step, pocket(i), 'stroke="#d9a21b" stroke-width="0.6"')}
-      <text transform="rotate(${i * step + step / 2} 100 100)" x="100" y="77" style="font-size:${fsFor(w).toFixed(1)}px" dy="-50">${esc(String(w))}</text>`,
-    )
-    .join('');
-  // The decorative ring of green cells inside the numbers, like a roulette's inner track.
-  const cells = Array.from({ length: 24 }, (_, i) => ring(49, 60, i * 15 + 1.2, (i + 1) * 15 - 1.2, i % 2 ? '#2f9a4d' : '#237a3a', 'stroke="#0a1f12" stroke-width="0.7"')).join('');
-  const studs = [45, 135, 225, 315]
-    .map((a) => `<path transform="rotate(${a} 100 100)" d="M100 3.6 L103.4 8.4 L100 13.2 L96.6 8.4 Z" fill="url(#sw-brass)" stroke="#6e4d09" stroke-width="0.4" filter="url(#sw-sh)"/>`)
-    .join('');
-  const smallStuds = [0, 90, 180, 270]
-    .map((a) => `<path transform="rotate(${a} 100 100)" d="M100 5.6 L102.2 8.4 L100 11.2 L97.8 8.4 Z" fill="url(#sw-brass)" opacity="0.9"/>`)
-    .join('');
-  const arms = [0, 90, 180, 270]
-    .map(
-      (a) => `<g transform="rotate(${a} 100 100)">
-        <rect x="97.6" y="70" width="4.8" height="32" rx="2.4" fill="url(#sw-brass)" stroke="#7c570b" stroke-width="0.4"/>
-        <rect x="98.4" y="71" width="1.4" height="30" rx="0.7" fill="#fff2c4" opacity="0.55"/>
-        <circle cx="100" cy="68.5" r="5.4" fill="url(#sw-ball)" stroke="#6e4d09" stroke-width="0.4"/>
-      </g>`,
-    )
-    .join('');
+  const PAL = ['#e3263a', '#7c3aed', '#0ea5e9', '#f59e0b', '#16a34a', '#ec4899', '#f97316'];
+  const color = (i) => PAL[(i === n - 1 && (n - 1) % PAL.length === 0 && n > 1 ? 1 : i) % PAL.length]; // the last wedge never matches the first
+  const R = 85; // wedge radius inside the rim
+  const slice = (i) =>
+    `<path d="M100 100 L${pt(R, i * step)} A${R} ${R} 0 ${step > 180 ? 1 : 0} 1 ${pt(R, (i + 1) * step)} Z" fill="${color(i)}" stroke="#fff" stroke-width="1.1"/>`;
+  // The label runs along the wedge, centre to rim, sized to fit its length and the wedge's width.
+  const label = (w, i) => {
+    const text = String(w);
+    const fs = Math.max(5.8, Math.min(13, 92 / Math.max(4, text.length), step / 3.2));
+    return `<text transform="rotate(${i * step + step / 2 - 90} 100 100)" x="122" y="100" dominant-baseline="middle" text-anchor="start" style="font-size:${fs.toFixed(1)}px">${esc(text)}</text>`;
+  };
+  const bulbs = Array.from({ length: 16 }, (_, i) => {
+    const [cx, cy] = pt(92.5, i * 22.5).split(' ');
+    return `<circle class="bulb" cx="${cx}" cy="${cy}" r="2.6" fill="#ffe9a8" style="animation-delay:${(i % 2) * 0.55}s"/>`;
+  }).join('');
   return `<svg viewBox="0 0 200 200" id="spin-wheel" aria-hidden="true">
     <defs>
-      <radialGradient id="sw-rim" cx="33%" cy="25%" r="100%">
-        <stop offset="0" stop-color="#d89a62"/><stop offset="0.4" stop-color="#b06a35"/><stop offset="0.75" stop-color="#8a4e22"/><stop offset="1" stop-color="#572f14"/>
-      </radialGradient>
-      <radialGradient id="sw-bowl" cx="36%" cy="28%" r="92%">
-        <stop offset="0" stop-color="#e2a86f"/><stop offset="0.45" stop-color="#b06a35"/><stop offset="0.78" stop-color="#8a4f22"/><stop offset="1" stop-color="#5f371a"/>
-      </radialGradient>
-      <linearGradient id="sw-brass" x1="0" y1="0" x2="0.9" y2="1">
-        <stop offset="0" stop-color="#fff0b8"/><stop offset="0.45" stop-color="#e8b83a"/><stop offset="0.8" stop-color="#b3821a"/><stop offset="1" stop-color="#6e4d09"/>
+      <linearGradient id="sw-rim" x1="0" y1="0" x2="0.8" y2="1">
+        <stop offset="0" stop-color="#ffe9a8"/><stop offset="0.45" stop-color="#e8b83a"/><stop offset="1" stop-color="#8f650f"/>
       </linearGradient>
-      <radialGradient id="sw-ball" cx="32%" cy="28%" r="80%">
-        <stop offset="0" stop-color="#fff0c0"/><stop offset="0.5" stop-color="#e0a81e"/><stop offset="1" stop-color="#7c570b"/>
-      </radialGradient>
-      <!-- crevice shadows where the levels meet: the grooves that make it read as 3-D -->
       <radialGradient id="sw-depth" gradientUnits="userSpaceOnUse" cx="100" cy="100" r="100">
-        <stop offset="0.46" stop-color="rgba(0,0,0,0)"/><stop offset="0.485" stop-color="rgba(0,0,0,0.42)"/><stop offset="0.5" stop-color="rgba(0,0,0,0.06)"/>
-        <stop offset="0.59" stop-color="rgba(0,0,0,0)"/><stop offset="0.615" stop-color="rgba(0,0,0,0.4)"/><stop offset="0.645" stop-color="rgba(0,0,0,0)"/>
-        <stop offset="0.8" stop-color="rgba(0,0,0,0)"/><stop offset="0.845" stop-color="rgba(0,0,0,0.45)"/><stop offset="0.865" stop-color="rgba(0,0,0,0.08)"/>
-        <stop offset="0.98" stop-color="rgba(0,0,0,0.12)"/><stop offset="1" stop-color="rgba(0,0,0,0.4)"/>
+        <stop offset="0.55" stop-color="rgba(255,255,255,0)"/><stop offset="0.8" stop-color="rgba(0,0,0,0.12)"/><stop offset="0.85" stop-color="rgba(0,0,0,0.3)"/>
+      </radialGradient>
+      <radialGradient id="sw-hub" cx="35%" cy="30%" r="85%">
+        <stop offset="0" stop-color="#fff0c0"/><stop offset="0.55" stop-color="#e8b83a"/><stop offset="1" stop-color="#8f650f"/>
       </radialGradient>
       <clipPath id="sw-clip"><circle cx="100" cy="100" r="99"/></clipPath>
-      <filter id="sw-sh" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="1.2" stdDeviation="1.1" flood-color="#000" flood-opacity="0.5"/></filter>
     </defs>
-    <circle cx="100" cy="100" r="99" fill="url(#sw-rim)" stroke="#3c2008" stroke-width="1.8"/>
-    <circle cx="100" cy="100" r="97.6" fill="none" stroke="rgba(255,226,170,0.35)" stroke-width="0.8"/>
-    ${studs}${smallStuds}
-    <circle cx="100" cy="100" r="86.6" fill="none" stroke="rgba(60,30,8,0.55)" stroke-width="2.4"/>
-    <circle cx="100" cy="100" r="84.8" fill="none" stroke="url(#sw-brass)" stroke-width="1.8"/>
-    ${slices}
-    <circle cx="100" cy="100" r="61.8" fill="none" stroke="url(#sw-brass)" stroke-width="1.6"/>
-    ${cells}
-    <circle cx="100" cy="100" r="100" fill="url(#sw-depth)" pointer-events="none"/>
-    <circle cx="100" cy="100" r="48.5" fill="url(#sw-bowl)" stroke="rgba(30,12,2,0.55)" stroke-width="2"/>
-    <circle cx="100" cy="100" r="43" fill="none" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>
-    <circle cx="100" cy="100" r="36" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
-    <circle cx="100" cy="100" r="29" fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="1"/>
-    <ellipse cx="86" cy="80" rx="30" ry="18" fill="#fff" opacity="0.1" transform="rotate(-28 86 80)"/>
-    <g filter="url(#sw-sh)">${arms}
-      <circle cx="100" cy="100" r="11" fill="url(#sw-ball)" stroke="#6e4d09" stroke-width="0.5"/>
-      <circle cx="96.5" cy="96.5" r="3.6" fill="#fff3cf" opacity="0.8"/>
-    </g>
-    <g clip-path="url(#sw-clip)"><ellipse cx="74" cy="52" rx="82" ry="52" fill="#fff" opacity="0.055" transform="rotate(-18 74 52)"/></g>
+    <circle cx="100" cy="100" r="99" fill="url(#sw-rim)" stroke="#6e4d09" stroke-width="1.4"/>
+    <circle cx="100" cy="100" r="86.5" fill="#1a1230" stroke="rgba(0,0,0,0.35)" stroke-width="1.6"/>
+    ${wedges.map((w, i) => slice(i)).join('')}
+    <circle cx="100" cy="100" r="${R}" fill="url(#sw-depth)" pointer-events="none"/>
+    ${wedges.map((w, i) => label(w, i)).join('')}
+    ${bulbs}
+    <circle cx="100" cy="100" r="15" fill="url(#sw-hub)" stroke="#8f650f" stroke-width="1"/>
+    <text x="100" y="105.5" text-anchor="middle" class="hub-star" style="font-size:13px">★</text>
+    <g clip-path="url(#sw-clip)"><ellipse cx="74" cy="52" rx="82" ry="50" fill="#fff" opacity="0.07" transform="rotate(-18 74 52)"/></g>
   </svg>`;
 }
 

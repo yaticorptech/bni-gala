@@ -712,7 +712,7 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-badge, .live-dot, .cd-num.pop, .badge-best, .stage.shake, .modal, .modal-box,
-  body::before, .btn-primary, .btn-gold::after, .ripple, #view-hub > * { animation: none; }
+  body::before, .btn-primary, .btn-gold::after, .ripple, #view-hub > *, .sp-track { animation: none; }
 }
 
 /* the "you won!" pop-up after the spin */
@@ -727,6 +727,36 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
   text-shadow: 0 2px 14px rgba(247, 197, 72, 0.45);
   animation: pop 0.5s cubic-bezier(.2, 1.6, .4, 1);
 }
+
+/* ----- sponsor strip (auto-scrolling marquee) ----- */
+.sponsors { margin: 18px 0 6px; }
+.sp-cap { text-align: center; color: var(--muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
+.sp-mask {
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.sp-track { display: flex; align-items: center; width: max-content; animation: spScroll var(--dur, 24s) linear infinite; }
+@keyframes spScroll { to { transform: translateX(-50%); } }
+.sp-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 26px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 0.92rem;
+}
+.sp-item img { height: 26px; width: auto; display: block; border-radius: 4px; background: #fff; padding: 2px 5px; }
+.sp-item:has(img) b { display: none; } /* a logo speaks for itself; the name is its fallback */
 
 /* ----- profile ----- */
 .pf-id { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }

@@ -146,6 +146,7 @@ function renderJoin() {
         <button class="btn btn-primary btn-lg" type="submit" ${canSubmit ? '' : 'disabled'}>${login ? 'Log in →' : 'Let’s play →'}</button>
         <p class="fine center">${login ? 'Use the mobile number you registered with' : canSubmit ? `${S.games.filter((g) => !g.hosted && !g.bonus).length} quick games · solo and team play · watch the big screen!` : 'Registration opens once the organiser adds the chapter list — hang tight!'}</p>
       </form>
+      ${sponsorsHtml()}
     </div>`;
 
   $('#view-join').querySelectorAll('[data-tab]').forEach((b) =>
@@ -220,6 +221,19 @@ function miniBoardHtml() {
     )
     .join('');
   return `<h3><span class="live-dot"></span> Live top 5</h3>${rows}`;
+}
+
+/** The sponsor strip: logos (or styled names) gliding by on a seamless loop. */
+function sponsorsHtml() {
+  const list = S.sponsors || [];
+  if (!list.length) return '';
+  const items = list
+    .map((s) => `<span class="sp-item">${s.img ? `<img src="${esc(s.img)}" alt="${esc(s.name)}" onerror="this.remove()">` : ''}<b>${esc(s.name)}</b></span>`)
+    .join('');
+  return `<div class="sponsors">
+    <div class="sp-cap">✨ Proudly supported by</div>
+    <div class="sp-mask"><div class="sp-track" style="--dur:${Math.max(14, list.length * 3)}s">${items}${items}</div></div>
+  </div>`;
 }
 
 function gameCardHtml(g, mode = 'solo') {
@@ -313,6 +327,7 @@ function renderHub() {
       <h3 class="sec-title" style="--accent:${me.team?.color || '#64748b'}">👥 Team games <small>every point counts for ${esc(me.teamDetail.name)}</small></h3>
       <section class="games" id="team-games">${teamGames.map((g) => gameCardHtml(g, 'team')).join('')}</section>` : ''}
     <section class="card mini-board" id="mini-board">${miniBoardHtml()}</section>
+    ${sponsorsHtml()}
     <footer class="hub-foot">Playing as <b>${esc(me.player.name)}</b>${me.player.chapter ? ` · ${esc(me.player.chapter)}` : ''}<br>
       <button class="link" id="switch-btn">Not you? Switch player</button></footer>`;
 
@@ -1492,6 +1507,15 @@ async function boot() {
     const st = await api('/api/state');
     S.settings = st.settings;
     S.games = st.games;
+    // Sponsor logos/names for the scrolling strip — optional, silently absent if the file isn't there.
+    fetch('/sponsors.json')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => {
+        S.sponsors = Array.isArray(list) ? list.filter((x) => x && x.name) : [];
+        if (S.sponsors.length && S.view === 'hub') renderHub();
+        else if (S.sponsors.length && S.view === 'join') renderJoin();
+      })
+      .catch(() => {});
   } catch {
     $('#boot-msg').innerHTML = 'Can’t reach the game server.<br><br><button class="btn btn-primary" onclick="location.reload()">Try again</button>';
     $('#view-boot .spinner').remove();

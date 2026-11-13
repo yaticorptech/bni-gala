@@ -1245,7 +1245,25 @@ async function refreshGames() {
   } catch { /* keep what we have */ }
 }
 
+/** Sponsor strip along the bottom: logos (or styled names) on a seamless scrolling loop. */
+function loadSponsors() {
+  fetch('/sponsors.json')
+    .then((r) => (r.ok ? r.json() : []))
+    .then((list) => {
+      const sponsors = (Array.isArray(list) ? list : []).filter((x) => x && x.name);
+      if (!sponsors.length) return;
+      const items = sponsors
+        .map((s) => `<span class="sp-item">${s.img ? `<img src="${esc(s.img)}" alt="${esc(s.name)}" onerror="this.remove()">` : ''}<b>${esc(s.name)}</b></span>`)
+        .join('');
+      const bar = $('#sponsorbar');
+      bar.innerHTML = `<span class="sp-cap">✨ Proudly supported by</span><div class="sp-mask"><div class="sp-track" style="--dur:${Math.max(18, sponsors.length * 3.5)}s">${items}${items}</div></div>`;
+      bar.classList.remove('hidden');
+    })
+    .catch(() => {});
+}
+
 async function boot() {
+  loadSponsors();
   const st = await api('/api/state');
   games = st.games;
   setHeader(st.settings);

@@ -592,6 +592,34 @@ body:not([data-mode="live"]) .top-right .pill:not(.live-pill) { display: none; }
 .crown-score { font-size: 2.4rem; font-weight: 900; margin-top: 0.4rem; }
 .crown-podium { list-style: none; display: flex; gap: 3rem; padding: 0; margin: 0; font-size: 1.6rem; font-weight: 700; }
 
+/* ----- sponsor strip along the bottom ----- */
+.sponsorbar { display: flex; align-items: center; gap: 1.6rem; flex: none; }
+.sponsorbar .sp-cap { flex: none; color: var(--muted); font-size: 0.95rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.sponsorbar .sp-mask {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.sponsorbar .sp-track { display: flex; align-items: center; width: max-content; animation: spScroll var(--dur, 28s) linear infinite; }
+@keyframes spScroll { to { transform: translateX(-50%); } }
+.sponsorbar .sp-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-right: 2.6rem;
+  padding: 0.45rem 1.2rem;
+  border-radius: 99px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+.sponsorbar .sp-item img { height: 2.2rem; width: auto; display: block; border-radius: 0.3rem; background: #fff; padding: 0.15rem 0.4rem; }
+.sponsorbar .sp-item:has(img) b { display: none; }
+
 /* ----- banner, sound hint, confetti ----- */
 .banner {
   position: fixed;
@@ -638,5 +666,5 @@ body:not([data-mode="live"]) .top-right .pill:not(.live-pill) { display: none; }
 .confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 50; }
 
 @media (prefers-reduced-motion: reduce) {
-  .dot, .empty-icon, .secret-icon, .slot.drum { animation: none; }
+  .dot, .empty-icon, .secret-icon, .slot.drum, .sp-track { animation: none; }
 }

@@ -514,7 +514,7 @@ async function browseTeams() {
 
 // ------------------------------------------------------------------ welcome spin
 
-const SPIN_FALLBACK = [100, 200, 50, 300, 75, 250, 125, 150]; // mirror of the server's wheel
+const SPIN_FALLBACK = ['Digital Planet', 'Frameit', 'Modicare', 'Nandi Oil', 'Presto', 'DayToday', 'Aabhejya Twam', 'Yaticorp', 'Hangyo']; // mirror of the server's wheel
 
 /** Land after login/boot: via the welcome spin if this player hasn't had theirs yet. */
 function landHome() {

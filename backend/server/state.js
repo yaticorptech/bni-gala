@@ -52,7 +52,7 @@ const defaultSettings = () => ({
   maxTeamSize: 5,
   enabledGames: GAMES.map((g) => g.id),
   teamGames: [...DEFAULT_TEAM_GAMES], // games that can be played "for the team"
-  spinWedges: GAME_MAP.spin.wedges.map((n) => ({ label: String(n), stock: null })), // welcome-spin prizes { label, stock } — stock null = unlimited
+  spinWedges: GAME_MAP.spin.wedges.map(normWedge), // welcome-spin prizes { label, stock } — stock null = unlimited
   networkOpen: true, // Power Connections runs only while this is on (the admin's Start/Stop buttons)
   chapters: [], // join-form dropdown — players must pick one; empty list pauses registration
   teamScores: {}, // teamId → taps across all Tap Battle rounds

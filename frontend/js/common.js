@@ -296,6 +296,25 @@ export const sfx = {
     this.fanfare(delay);
     this.applause(sec, delay + 0.3);
   },
+  /** THE winning moment (the wheel lands): cymbal, a loud triumphant brass run with octaves,
+   * a held victory chord, applause and glitter — the loudest thing the app ever plays. */
+  jackpot() {
+    this.crash();
+    tone(392, { dur: 0.12, type: 'sawtooth', vol: 0.1, to: 784, delay: 0.02 }); // riser into the run
+    [523, 659, 784, 1047].forEach((f, i) => {
+      const at = 0.14 + i * 0.13;
+      tone(f, { dur: 0.24, type: 'triangle', vol: 0.17, delay: at });
+      tone(f, { dur: 0.24, type: 'sawtooth', vol: 0.08, delay: at });
+      tone(f / 2, { dur: 0.24, type: 'triangle', vol: 0.09, delay: at }); // octave body
+    });
+    [523, 659, 784, 1047, 1319].forEach((f) => {
+      tone(f, { dur: 1.6, type: 'triangle', vol: 0.1, delay: 0.68 }); // held victory chord
+      tone(f, { dur: 1.6, type: 'sawtooth', vol: 0.045, delay: 0.68 });
+    });
+    this.applause(3.2, 0.55);
+    this.sparkle(0.75);
+    this.sparkle(1.15);
+  },
 };
 
 // ------------------------------------------------------------------ confetti

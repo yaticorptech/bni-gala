@@ -694,11 +694,9 @@ async function doSpin() {
   sfx.drumroll(1.3); // suspense as it creeps onto the winning wedge
   await sleep(1500);
   const isPts = /^\d+$/.test(String(res.prize));
-  if (!isPts || Number(res.prize) >= 250) sfx.fanfare(); // gifts and big wedges get the brass
-  else sfx.win();
-  sfx.sparkle(0.45);
-  vibrate([40, 60, 120]);
-  confetti({ duration: 2400, count: 150 });
+  sfx.jackpot(); // the loudest moment of the night — cymbal, brass, applause, glitter
+  vibrate([80, 50, 80, 50, 180]);
+  confetti({ duration: 3200, count: 230 });
   $('#spin-result').innerHTML = `<span class="spin-prize">${isPts ? `+${fmt(res.prize)} points!` : `🎁 ${esc(res.prize)}!`}</span>`;
   btn.outerHTML = '<button class="btn btn-primary btn-lg" id="spin-go">Let’s play →</button>';
   $('#spin-go').onclick = backToHub;

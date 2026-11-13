@@ -1,10 +1,8 @@
 import { api, apiUrl, withRetry, connectSocket, getToken, setToken, clearToken, toast, sfx, esc, fmt, countUp, sleep, confetti, abortError, vibrate, photoUrl, initials, hue } from './common.js';
 import rush from './games/rush.js';
 import reflex from './games/reflex.js';
-import memory from './games/memory.js';
 import colors from './games/colors.js';
 import pictionary from './games/pictionary.js';
-import simon from './games/simon.js';
 import frenzy from './games/frenzy.js';
 import math from './games/math.js';
 import timing from './games/timing.js';
@@ -12,7 +10,7 @@ import hunt from './games/hunt.js';
 import balloons from './games/balloons.js';
 import bullseye from './games/bullseye.js';
 
-const MODULES = { rush, reflex, memory, colors, pictionary, simon, frenzy, math, timing, hunt, balloons, bullseye };
+const MODULES = { rush, reflex, colors, pictionary, frenzy, math, timing, hunt, balloons, bullseye };
 const VIEWS = ['boot', 'join', 'hub', 'game', 'result', 'tap', 'quiz', 'spin', 'connect', 'profile'];
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -1385,10 +1383,8 @@ function metaLine(gameId, m) {
   switch (gameId) {
     case 'rush': return `🤝 ${m.good} referrals · ⭐ ${m.golden} golden · 👻 ${m.ghost} ghosts`;
     case 'reflex': return `Average ${m.avgMs} ms · Best ${m.bestMs} ms${m.falseStarts ? ` · ${m.falseStarts} early tap${m.falseStarts > 1 ? 's' : ''}` : ''}`;
-    case 'memory': return m.completed ? `${m.moves} moves in ${Math.round(m.timeMs / 1000)} seconds` : `${m.pairs}/8 pairs — time ran out!`;
     case 'colors': return `${m.correct} right · ${m.wrong} wrong`;
     case 'pictionary': return `${m.correct} of ${m.total} professions guessed`;
-    case 'simon': return m.level ? `Sequence of ${m.level} completed` : 'Slipped on the first pad — next time!';
     case 'frenzy': return `${m.taps} taps · ${m.perSec} a second`;
     case 'math': return `${m.correct} right · ${m.wrong} wrong`;
     case 'timing': return `Average ${m.avgOffMs} ms off target · best ${m.bestOffMs} ms`;

@@ -213,26 +213,6 @@ const GAMES = [
     },
   },
   {
-    id: 'memory',
-    name: 'Memory Match',
-    emoji: '🧠',
-    color: '#a855f7',
-    tagline: 'Find all 8 pairs — fast, with few moves.',
-    duration: '2 min max',
-    howTo: ['Flip two cards at a time', 'Match all 8 pairs before time runs out', 'Fewer moves + faster time = more points'],
-    minMs: 5000,
-    score(r, { elapsedMs }) {
-      const pairs = count(r.pairs, 8, 'pairs');
-      const moves = count(r.moves, 500, 'moves');
-      const timeMs = millis(r.timeMs, 125000, 'timeMs');
-      if (moves < pairs || timeMs > elapsedMs + 2000) throw invalid('timing');
-      if (pairs < 8) return { score: pairs * 15, meta: { pairs, moves, timeMs, completed: false } };
-      if (moves < 8 || timeMs < 4000) throw invalid('too fast');
-      const raw = 1000 - Math.max(0, moves - 8) * 20 - Math.max(0, timeMs / 1000 - 20) * 5;
-      return { score: clamp(Math.round(raw), 150, MAX), meta: { pairs, moves, timeMs, completed: true } };
-    },
-  },
-  {
     id: 'colors',
     name: 'Colour Clash',
     emoji: '🎨',
@@ -246,23 +226,6 @@ const GAMES = [
       const wrong = count(r.wrong, 120, 'wrong');
       if (correct + wrong > 120) throw invalid('too many answers');
       return { score: clamp(correct * 30 - wrong * 15, 0, MAX), meta: { correct, wrong } };
-    },
-  },
-  {
-    id: 'simon',
-    name: 'Handshake Sequence',
-    emoji: '🎵',
-    color: '#06b6d4',
-    tagline: 'Watch the pattern, repeat it — how far can you go?',
-    duration: 'until you slip',
-    howTo: ['Four pads light up in a sequence', 'Tap them back in the same order', 'Each level adds one more — one slip and the run ends'],
-    minMs: 1500,
-    score(r, { elapsedMs }) {
-      const level = count(r.level, 30, 'level');
-      // Every level replays the whole sequence, so a run to level L has a hard minimum length.
-      if (elapsedMs + 1000 < level * 700 + 120 * level * (level + 1)) throw invalid('too fast');
-      const pts = level <= 5 ? level * 80 : 400 + (level - 5) * 120; // level 10 = 1000
-      return { score: clamp(pts, 0, MAX), meta: { level } };
     },
   },
   {

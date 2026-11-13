@@ -876,36 +876,6 @@ const DEMOS = {
     };
     loop();
   },
-  memory(d) {
-    d.screen.innerHTML = `<div class="dq-cap">Find the pairs!</div><div class="dmem">${['🤝', '⭐', '⭐', '🤝']
-      .map((e) => `<button class="dmem-c" data-e="${e}">❓</button>`)
-      .join('')}</div>`;
-    const c = [...d.screen.querySelectorAll('.dmem-c')];
-    const flip = (x) => { x.textContent = x.dataset.e; x.classList.add('open'); };
-    const loop = () => {
-      c.forEach((x) => { x.textContent = '❓'; x.classList.remove('open', 'won'); });
-      d.T.after(() => demoTap(d.finger, c[0], d.T, () => {
-        flip(c[0]);
-        demoTap(d.finger, c[3], d.T, () => {
-          flip(c[3]);
-          c[0].classList.add('won');
-          c[3].classList.add('won');
-          demoFloat(d.screen, c[3], 'Pair! ✓');
-          demoTap(d.finger, c[1], d.T, () => {
-            flip(c[1]);
-            demoTap(d.finger, c[2], d.T, () => {
-              flip(c[2]);
-              c[1].classList.add('won');
-              c[2].classList.add('won');
-              demoFloat(d.screen, c[2], 'Pair! ✓');
-              d.T.after(loop, 1300);
-            });
-          });
-        });
-      }), 500);
-    };
-    loop();
-  },
   colors(d) {
     const C = [['RED', '#ef4444'], ['BLUE', '#3b82f6'], ['GREEN', '#22c55e'], ['YELLOW', '#facc15']];
     quizDemo(d, () => {
@@ -914,30 +884,6 @@ const DEMOS = {
       if (ink === w) ink = (ink + 1) % 4;
       return { cap: 'Tap the INK colour — not the word!', prompt: `<span style="color:${C[ink][1]}">${C[w][0]}</span>`, cls: 'big', options: C.map((x) => x[0]), styles: C.map((x) => x[1]), correct: ink, pts: '+30' };
     });
-  },
-  simon(d) {
-    d.screen.innerHTML = `<div class="dq-cap">Watch the pattern, repeat it!</div><div class="dsim">${['#e3263a', '#3b82f6', '#22c55e', '#facc15']
-      .map((c) => `<button class="dsim-p" style="--c:${c}"></button>`)
-      .join('')}</div>`;
-    const pads = [...d.screen.querySelectorAll('.dsim-p')];
-    const seq = [0, 2, 1];
-    const flash = (i, done) => {
-      pads[i].classList.add('lit');
-      d.T.after(() => { pads[i].classList.remove('lit'); d.T.after(done, 170); }, 380);
-    };
-    const loop = () => {
-      let k = 0;
-      const show = () => (k < seq.length ? flash(seq[k++], show) : repeat(0));
-      const repeat = (j) =>
-        j < seq.length
-          ? demoTap(d.finger, pads[seq[j]], d.T, () => {
-              pads[seq[j]].classList.add('lit');
-              d.T.after(() => { pads[seq[j]].classList.remove('lit'); repeat(j + 1); }, 240);
-            })
-          : (demoFloat(d.screen, pads[2], 'Level up! ✓'), d.T.after(loop, 1200));
-      show();
-    };
-    loop();
   },
   pictionary(d) {
     const P = [['🦷🪥', 'Dentist'], ['📸💒', 'Photographer'], ['🏠📐', 'Architect'], ['⚖️👔', 'Lawyer']];

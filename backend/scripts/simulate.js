@@ -48,9 +48,7 @@ function estimate(gameId, r) {
   switch (gameId) {
     case 'rush': return clamp(r.good * 20 + r.golden * 50 - r.ghost * 15);
     case 'reflex': return clamp(r.times.reduce((s, t) => s + Math.max(0, Math.min(200, (650 - t) / 2.5)), 0) - r.falseStarts * 25);
-    case 'memory': return clamp(1000 - Math.max(0, r.moves - 8) * 20 - Math.max(0, r.timeMs / 1000 - 20) * 5);
     case 'colors': return clamp(r.correct * 30 - r.wrong * 15);
-    case 'simon': return clamp(r.level <= 5 ? r.level * 80 : 400 + (r.level - 5) * 120);
     case 'frenzy': return clamp(r.taps * 7);
     case 'math': return clamp(r.correct * 35 - r.wrong * 15);
     case 'timing': return clamp(r.times.reduce((s, t) => s + Math.max(0, 334 - Math.ceil(Math.abs(t - 5000) / 2)), 0));
@@ -68,16 +66,8 @@ function fake(gameId, skill) {
       return { wait: 33500, result: { good: int(14 + 20 * skill, 20 + 22 * skill), golden: int(0, 1 + 3 * skill), ghost: int(0, 6 * (1.1 - skill)) } };
     case 'reflex':
       return { wait: int(11000, 16000), result: { times: Array.from({ length: 5 }, () => int(440 - 190 * skill, 520 - 180 * skill)), falseStarts: Math.random() < 0.2 ? 1 : 0 } };
-    case 'memory': {
-      const timeMs = int(70000 - 42000 * skill, 85000 - 40000 * skill);
-      return { wait: timeMs + 3500, result: { pairs: 8, moves: int(26 - 13 * skill, 32 - 14 * skill), timeMs } };
-    }
     case 'colors':
       return { wait: 33500, result: { correct: int(12 + 18 * skill, 16 + 20 * skill), wrong: int(0, 5 * (1.2 - skill)) } };
-    case 'simon': {
-      const level = int(3 + 5 * skill, 5 + 7 * skill);
-      return { wait: level * (level + 1) * 300 + 2500, result: { level } };
-    }
     case 'frenzy':
       return { wait: 11500, result: { taps: int(55 + 55 * skill, 80 + 60 * skill) } };
     case 'math':

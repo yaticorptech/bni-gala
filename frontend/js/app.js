@@ -1,4 +1,4 @@
-import { api, apiUrl, withRetry, connectSocket, getToken, setToken, clearToken, toast, sfx, esc, fmt, countUp, sleep, confetti, abortError, vibrate, photoUrl, initials } from './common.js';
+import { api, apiUrl, withRetry, connectSocket, getToken, setToken, clearToken, toast, sfx, esc, fmt, countUp, sleep, confetti, abortError, vibrate, photoUrl, initials, hue } from './common.js';
 import rush from './games/rush.js';
 import reflex from './games/reflex.js';
 import memory from './games/memory.js';
@@ -16,7 +16,7 @@ import cups from './games/cups.js';
 import higher from './games/higher.js';
 
 const MODULES = { rush, reflex, memory, colors, pictionary, simon, odd, frenzy, math, timing, hunt, balloons, bullseye, cups, higher };
-const VIEWS = ['boot', 'join', 'hub', 'game', 'result', 'tap', 'quiz', 'spin', 'connect'];
+const VIEWS = ['boot', 'join', 'hub', 'game', 'result', 'tap', 'quiz', 'spin', 'connect', 'profile'];
 const $ = (sel, root = document) => root.querySelector(sel);
 
 const S = {
@@ -294,11 +294,11 @@ function renderHub() {
   const teamGames = S.games.filter((g) => !g.hosted && s.teamGames.includes(g.id));
   $('#view-hub').innerHTML = `
     <header class="hub-head">
-      <div class="hub-id">
+      <button class="hub-id" id="profile-btn" type="button" aria-label="My profile">
         <div class="hub-photo"><img src="${photoUrl(me.player.name)}" alt="" onerror="this.parentElement.remove()"></div>
         <div><div class="eyebrow">${esc(s.eventTitle)}</div><h2>Hi, ${esc(first)} 👋</h2>
-        ${me.player.chapter ? `<div class="fine">🏛️ ${esc(me.player.chapter)}</div>` : ''}</div>
-      </div>
+        <div class="fine">${me.player.chapter ? `🏛️ ${esc(me.player.chapter)} · ` : ''}👤 My profile ›</div></div>
+      </button>
       <button class="icon-btn" id="mute-btn" aria-label="Toggle sound">${sfx.muted ? '🔇' : '🔊'}</button>
     </header>
     <section class="score-card">
@@ -317,6 +317,7 @@ function renderHub() {
       <button class="link" id="switch-btn">Not you? Switch player</button></footer>`;
 
   $('#view-hub').querySelectorAll('.game-card').forEach((el) => el.addEventListener('click', () => openGame(el.dataset.game, el.dataset.mode)));
+  $('#profile-btn').onclick = () => enterProfile();
   $('#mute-btn').onclick = (e) => {
     sfx.muted = !sfx.muted;
     e.currentTarget.textContent = sfx.muted ? '🔇' : '🔊';
@@ -330,6 +331,74 @@ function renderHub() {
     if (ok) signedOut();
   };
 
+}
+
+// ------------------------------------------------------------------ profile
+
+/** My profile: who I am, my Spin & Win prize, my numbers and my best games. */
+async function enterProfile() {
+  sfx.unlock();
+  sfx.tap();
+  try {
+    await refreshMe();
+  } catch (err) {
+    if (err.status === 401) return signedOut('Please log in again');
+  }
+  renderProfile();
+  show('profile');
+}
+
+function renderProfile() {
+  const me = S.me;
+  const p = me.player;
+  const bests = S.games
+    .filter((g) => !g.hosted && !g.bonus && !g.social && me.games[g.id]?.best != null)
+    .map((g) => ({ g, best: me.games[g.id].best, used: me.games[g.id].used }))
+    .sort((a, b) => b.best - a.best)
+    .slice(0, 6);
+  const tries = Object.values(me.games).reduce((sum, i) => sum + (i.used || 0), 0);
+  $('#view-profile').innerHTML = `
+    <header class="hub-head">
+      <div><div class="eyebrow">👤 My profile</div><h2>${esc(p.name)}</h2></div>
+      <button class="icon-btn" id="pf-back" aria-label="Back to games">✕</button>
+    </header>
+    <section class="card pf-id">
+      <div class="pf-photo" style="--h:${hue(p.name)}"><span>${esc(initials(p.name))}</span><img src="${photoUrl(p.name)}" alt="" onerror="this.remove()"></div>
+      <div class="pf-who">
+        <b>${esc(p.name)}</b>
+        ${p.business ? `<div>💼 ${esc(p.business)}</div>` : ''}
+        ${p.chapter ? `<div>🏛️ ${esc(p.chapter)}</div>` : ''}
+        ${me.teamDetail ? `<div>👥 Team ${esc(me.teamDetail.name)}</div>` : ''}
+      </div>
+    </section>
+    <section class="prize-ticket">
+      <div class="eyebrow">🎡 My Spin &amp; Win prize</div>
+      ${me.spin?.spun
+        ? /^\d+$/.test(String(me.spin.prize))
+          ? `<div class="pf-prize">+${fmt(me.spin.prize)}</div>
+             <p class="fine center">points, won on your welcome spin — already on your score 🎉</p>`
+          : `<div class="pf-prize text">🎁 ${esc(String(me.spin.prize))}</div>
+             <p class="fine center">Show this ticket at the prize desk to collect it!</p>`
+        : `<p class="fine center">You haven't had your welcome spin yet — one free spin, guaranteed prize!</p>
+           <button class="btn btn-gold" id="pf-spin">🎡 Spin now</button>`}
+    </section>
+    <section class="pf-stats">
+      <div class="card pf-stat"><span>Rank</span><b>${me.hidden ? '🤫' : me.rank ? `#${me.rank}` : '—'}</b></div>
+      <div class="card pf-stat"><span>Points</span><b>${fmt(me.total)}</b></div>
+      <div class="card pf-stat"><span>Games tried</span><b>${fmt(tries)}</b></div>
+      <div class="card pf-stat"><span>Connections</span><b>🔗 ${fmt(me.connections || 0)}</b></div>
+    </section>
+    ${bests.length
+      ? `<section class="card">
+          <h3>🏅 My best games</h3>
+          <div class="pf-bests">${bests
+            .map(({ g, best, used }) => `<div class="pf-best"><span>${g.emoji} ${esc(g.name)}</span><small>${used} ${used === 1 ? 'try' : 'tries'}</small><b>${fmt(best)}</b></div>`)
+            .join('')}</div>
+        </section>`
+      : '<p class="fine center">Play some games and your best scores will show here!</p>'}`;
+  $('#pf-back').onclick = backToHub;
+  const spin = $('#pf-spin');
+  if (spin) spin.onclick = () => renderSpin();
 }
 
 /** Live update from the socket without re-rendering the whole hub. */
@@ -471,10 +540,13 @@ function spinWheelSvg(wedges) {
     `<path d="M${pt(r1, a0)} A${r1} ${r1} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${pt(r1, a1)} L${pt(r0, a1)} A${r0} ${r0} 0 ${a1 - a0 > 180 ? 1 : 0} 0 ${pt(r0, a0)} Z" fill="${fill}" ${stroke}/>`;
   const odd = wedges.length % 2 === 1;
   const pocket = (i) => (odd && i === 0 ? '#1d8a44' : i % 2 ? '#15171e' : '#cf4028'); // odd count: wedge 0 is the green "zero"
+  // Prizes can be numbers or gift names — the label shrinks to fit its pocket's arc.
+  const arc = (2 * Math.PI * 73) / wedges.length;
+  const fsFor = (w) => Math.max(5.5, Math.min(wedges.length > 8 ? 10 : 12.5, (arc * 1.3) / Math.max(2, String(w).length)));
   const slices = wedges
     .map(
       (w, i) => `${ring(62, 84, i * step, (i + 1) * step, pocket(i), 'stroke="#d9a21b" stroke-width="0.6"')}
-      <text transform="rotate(${i * step + step / 2} 100 100)" x="100" y="77" style="font-size:${wedges.length > 8 ? 10 : 12.5}px" dy="-50">${w}</text>`,
+      <text transform="rotate(${i * step + step / 2} 100 100)" x="100" y="77" style="font-size:${fsFor(w).toFixed(1)}px" dy="-50">${esc(String(w))}</text>`,
     )
     .join('');
   // The decorative ring of green cells inside the numbers, like a roulette's inner track.
@@ -548,7 +620,7 @@ function renderSpin() {
       <div>
         <div class="eyebrow">Welcome, ${esc(first)}! 🎉</div>
         <h2>Spin &amp; Win</h2>
-        <p class="fine">One free spin on the house — whatever the wheel lands on goes straight onto your score.</p>
+        <p class="fine">One free spin on the house — whatever the wheel lands on is yours!</p>
       </div>
       <div class="spin-box"><div class="spin-pointer">▼</div>${spinWheelSvg(wedges)}</div>
       <div class="spin-result" id="spin-result"></div>
@@ -591,12 +663,13 @@ async function doSpin() {
   }
   sfx.drumroll(1.0); // suspense as it creeps onto the wedge
   await sleep(1200);
-  if (res.prize >= 250) sfx.fanfare(); // the big wedges get the brass
+  const isPts = /^\d+$/.test(String(res.prize));
+  if (!isPts || Number(res.prize) >= 250) sfx.fanfare(); // gifts and big wedges get the brass
   else sfx.win();
   sfx.sparkle(0.45);
   vibrate([40, 60, 120]);
   confetti({ duration: 2400, count: 150 });
-  $('#spin-result').innerHTML = `<span class="spin-prize">+${fmt(res.prize)} points!</span>`;
+  $('#spin-result').innerHTML = `<span class="spin-prize">${isPts ? `+${fmt(res.prize)} points!` : `🎁 ${esc(res.prize)}!`}</span>`;
   btn.outerHTML = '<button class="btn btn-primary btn-lg" id="spin-go">Let’s play →</button>';
   $('#spin-go').onclick = backToHub;
 }

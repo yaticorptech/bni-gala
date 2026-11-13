@@ -52,7 +52,7 @@ const defaultSettings = () => ({
   maxTeamSize: 5,
   enabledGames: GAMES.map((g) => g.id),
   teamGames: [...DEFAULT_TEAM_GAMES], // games that can be played "for the team"
-  spinWedges: [...GAME_MAP.spin.wedges], // welcome-spin prizes, clockwise from the top (admin-editable)
+  spinWedges: GAME_MAP.spin.wedges.map((n) => ({ label: String(n), stock: null })), // welcome-spin prizes { label, stock } — stock null = unlimited
   networkOpen: true, // Power Connections runs only while this is on (the admin's Start/Stop buttons)
   chapters: [], // join-form dropdown — players must pick one; empty list pauses registration
   teamScores: {}, // teamId → taps across all Tap Battle rounds
@@ -65,6 +65,16 @@ const defaultSettings = () => ({
 });
 
 const publicPlayer = ({ id, name, emoji, business, chapter, teamId }) => ({ id, name, emoji: emoji || '', business, chapter, teamId: teamId || null });
+
+/** A spin prize however it was written: "Mug x25" (25 in stock), "Mug" or 250 (unlimited). */
+const normWedge = (w) => {
+  if (w && typeof w === 'object') {
+    return { label: clean(String(w.label ?? ''), 14), stock: Number.isInteger(w.stock) && w.stock > 0 ? Math.min(9999, w.stock) : null };
+  }
+  const s = clean(String(w ?? ''), 24);
+  const m = s.match(/^(.*?)\s*[x×*]\s*(\d{1,4})$/i);
+  return m ? { label: clean(m[1], 14), stock: Math.max(1, Number(m[2])) } : { label: clean(s, 14), stock: null };
+};
 const publicRow = ({ rank, id, name, emoji, business, chapter, total, scores, live, connections }) => ({ rank, id, name, emoji: emoji || '', business, chapter, total, scores, live: live || null, connections: connections || 0 });
 const publicTeam = ({ id, name, emoji, color, chapter }) => ({ id, name, emoji, color, chapter: chapter || '' });
 
@@ -156,6 +166,7 @@ class GameState extends EventEmitter {
     if (!Number.isInteger(s.maxTeamSize) || s.maxTeamSize < 2 || s.maxTeamSize > 50) s.maxTeamSize = 5;
     if (!Number.isInteger(s.teamAttemptsPerGame) || s.teamAttemptsPerGame < 0 || s.teamAttemptsPerGame > 50) s.teamAttemptsPerGame = 2;
     s.liveQuiz = (Array.isArray(s.liveQuiz) ? s.liveQuiz : []).filter((q) => q && typeof q.q === 'string' && Array.isArray(q.options) && (Number.isInteger(q.answer) || q.answer === null));
+    s.spinWedges = (Array.isArray(s.spinWedges) && s.spinWedges.length ? s.spinWedges : defaultSettings().spinWedges).map(normWedge).filter((w) => w.label);
     // Games added in an update start enabled, without undoing games the admin switched off.
     const saved = data.settings || {};
     const known = new Set(Array.isArray(saved.knownGames) ? saved.knownGames : GAMES.map((g) => g.id));
@@ -239,12 +250,12 @@ class GameState extends EventEmitter {
 
   publicSettings() {
     const { eventTitle, tagline, playOpen, screenMode, attemptsPerGame, teamAttemptsPerGame, maxTeamSize, enabledGames, teamGames, chapters, spinWedges, networkOpen } = this.settings;
-    return { eventTitle, tagline, playOpen, screenMode, attemptsPerGame, teamAttemptsPerGame, maxTeamSize, enabledGames, teamGames, chapters, spinWedges, networkOpen: networkOpen !== false, emojis: EMOJIS };
+    return { eventTitle, tagline, playOpen, screenMode, attemptsPerGame, teamAttemptsPerGame, maxTeamSize, enabledGames, teamGames, chapters, spinWedges: spinWedges.map((w) => w.label), networkOpen: networkOpen !== false, emojis: EMOJIS };
   }
 
   /** The static game list, with the admin-set spin wheel patched in. */
   gamesPayload() {
-    return publicGames().map((g) => (g.id === 'spin' ? { ...g, wedges: [...this.settings.spinWedges] } : g));
+    return publicGames().map((g) => (g.id === 'spin' ? { ...g, wedges: this.settings.spinWedges.map((w) => w.label) } : g));
   }
 
   /** Ranks are secret while the board is hidden or being revealed — the team battle view is not a secret. */
@@ -293,10 +304,9 @@ class GameState extends EventEmitter {
     if ('networkOpen' in patch) s.networkOpen = Boolean(patch.networkOpen);
     if ('spinWedges' in patch) {
       if (!Array.isArray(patch.spinWedges)) throw new HttpError(400, 'spinWedges must be a list');
-      const wedges = patch.spinWedges.map(Number);
-      if (wedges.length < 2 || wedges.length > 12 || wedges.some((n) => !Number.isInteger(n) || n < 0 || n > MAX)) {
-        throw new HttpError(400, `The wheel needs 2 to 12 whole numbers, each 0 to ${MAX}`);
-      }
+      // A prize is a plain number (points), a gift name ("Mug"), or a gift with stock ("Mug x25").
+      const wedges = patch.spinWedges.map(normWedge).filter((w) => w.label);
+      if (wedges.length < 2 || wedges.length > 12) throw new HttpError(400, 'The wheel needs 2 to 12 prizes, up to 14 characters each (add stock like "Mug x25")');
       s.spinWedges = wedges;
     }
     this.persist('saveSettings', s);
@@ -473,7 +483,7 @@ class GameState extends EventEmitter {
     }
     const spun = this.spinAttempt(player.id);
     const connections = this.networkAttempt(player.id)?.meta.met.length ?? 0; // a count, never points
-    return { player: publicPlayer(player), games, connections, spin: { spun: Boolean(spun), prize: spun?.score ?? null }, teamDetail: this.teamDetail(player), ...this.livePayload(player.id) };
+    return { player: publicPlayer(player), games, connections, spin: { spun: Boolean(spun), prize: spun ? spun.meta?.label ?? spun.score : null }, teamDetail: this.teamDetail(player), ...this.livePayload(player.id) };
   }
 
   // ------------------------------------------------------------- power connections (networking)
@@ -563,27 +573,62 @@ class GameState extends EventEmitter {
    * phone only animates the wheel to the wedge the server names. Idempotent: spinning again
    * returns the original prize.
    */
+  /** How many of each spin prize have been won so far (by label). */
+  spinWon() {
+    const won = {};
+    for (const a of this.attempts.values()) {
+      if (a.gameId !== 'spin') continue;
+      const label = a.meta?.label ?? String(a.score);
+      won[label] = (won[label] || 0) + 1;
+    }
+    return won;
+  }
+
   spin(player) {
     const wedges = this.settings.spinWedges;
+    const labels = wedges.map((w) => w.label);
     const prev = this.spinAttempt(player.id);
     if (prev) {
       // the wheel may have been reconfigured since — land on the wedge that still shows their prize
+      const label = prev.meta?.label ?? String(prev.score);
       let index = prev.meta?.index ?? 0;
-      if (wedges[index] !== prev.score) index = Math.max(0, wedges.indexOf(prev.score));
-      return { already: true, prize: prev.score, index, wedges };
+      if (labels[index] !== label) index = Math.max(0, labels.indexOf(label));
+      return { already: true, prize: label, index, wedges: labels };
     }
-    const index = crypto.randomInt(wedges.length);
-    const prize = wedges[index];
+    // The draw is weighted by REMAINING stock, like pulling a random gift from the pile: a
+    // "x5" gift can never be won a sixth time, and the big pile carries the odds. Unlimited
+    // wedges (plain points) weigh in at the stocked wedges' average so they stay in play.
+    const won = this.spinWon();
+    const left = wedges.map((w) => (w.stock == null ? null : Math.max(0, w.stock - (won[w.label] || 0))));
+    const stocked = left.filter((l) => l != null);
+    let index;
+    if (!stocked.length) {
+      index = crypto.randomInt(wedges.length); // a pure points wheel: every wedge is equally likely
+    } else {
+      const mean = Math.max(1, Math.round(stocked.reduce((a, b) => a + b, 0) / stocked.length));
+      const weights = left.map((l) => (l == null ? mean : l));
+      const total = weights.reduce((a, b) => a + b, 0);
+      if (total <= 0) {
+        // Every stocked gift is handed out and there are no points wedges: land on the wedge
+        // that had the deepest pile — the least painful place to be one gift over.
+        index = wedges.reduce((best, w, i) => ((w.stock || 0) > (wedges[best].stock || 0) ? i : best), 0);
+      } else {
+        let r = crypto.randomInt(total);
+        index = weights.findIndex((w) => (r -= w) < 0);
+      }
+    }
+    const prize = labels[index];
+    const points = /^\d+$/.test(prize) ? Math.min(MAX, Number(prize)) : 0; // a number is points; anything else is a gift
     const now = Date.now();
-    const a = { id: id(12), playerId: player.id, gameId: 'spin', teamId: null, startedAt: now, finishedAt: now, score: prize, meta: { index }, pb: true };
+    const a = { id: id(12), playerId: player.id, gameId: 'spin', teamId: null, startedAt: now, finishedAt: now, score: points, meta: { index, label: prize }, pb: true };
     this.attempts.set(a.id, a);
     this.persist('saveAttempt', a);
     this.changed();
-    const item = { playerId: player.id, name: player.name, gameId: 'spin', score: prize, improved: false, at: now };
+    const item = { playerId: player.id, name: player.name, gameId: 'spin', score: points, prize, improved: false, at: now };
     this.recent.unshift(item);
     this.recent.length = Math.min(this.recent.length, 12);
     this.emit('activity', item);
-    return { already: false, prize, index, wedges };
+    return { already: false, prize, points, index, wedges: labels };
   }
 
   /** The full team view for its member: join code, member list, per-game team points and tries. */
@@ -1436,6 +1481,7 @@ class GameState extends EventEmitter {
         total: row?.total ?? 0,
         scores: row?.scores ?? {},
         connections: this.networkAttempt(p.id)?.meta.met.length ?? 0,
+        spinPrize: (() => { const sp = this.spinAttempt(p.id); return sp ? String(sp.meta?.label ?? sp.score) : ''; })(),
         tries: Object.values(used).reduce((a, b) => a + b, 0),
         teamTries: Object.values(usedTeam).reduce((a, b) => a + b, 0),
       };
@@ -1446,8 +1492,11 @@ class GameState extends EventEmitter {
       return { ...r, code: t.code, captain: this.players.get(t.captainId)?.name || '—', taps: this.settings.teamScores[t.id] || 0, createdAt: t.createdAt };
     });
     const { reveal, ...settings } = this.settings;
+    const won = this.spinWon();
     return {
       settings: { ...settings, revealedAt: reveal?.at ?? null },
+      // The prize desk's live stock: how many of each limited spin gift are still unwon.
+      spinStock: this.settings.spinWedges.filter((w) => w.stock != null).map((w) => ({ label: w.label, stock: w.stock, left: Math.max(0, w.stock - (won[w.label] || 0)) })),
       pendingIntro: this.pendingIntro || null, // a game mid-intro on the big screen, about to unlock
       games: this.gamesPayload(),
       players,
@@ -1472,7 +1521,7 @@ class GameState extends EventEmitter {
       p.chapter,
       p.phone,
       p.team,
-      ...GAMES.map((g) => (g.id === 'network' ? p.connections || '' : p.scores[g.id] ?? '')),
+      ...GAMES.map((g) => (g.id === 'network' ? p.connections || '' : g.id === 'spin' ? p.spinPrize : p.scores[g.id] ?? '')),
       p.total,
       p.tries,
       p.teamTries,

@@ -84,10 +84,11 @@ function renderControls() {
       <div class="ctl-body"><select id="tries">${triesOpts}</select></div>
     </div>
     <div class="ctl">
-      <div class="ctl-label">Spin &amp; Win wheel<small>The welcome-spin prizes, clockwise from the top — 2 to 12 numbers (0 to 1000), comma separated. Changes apply to everyone who hasn’t spun yet.</small></div>
+      <div class="ctl-label">Spin &amp; Win wheel<small>2 to 12 prizes, comma separated. A plain number is points; a gift name goes on the winner's profile ticket; add stock like "Mug x25" — the draw is weighted by what's left and a gift can never run out of stock.</small></div>
       <div class="ctl-body">
-        <input class="txt" id="spin-wedges" value="${esc((s.spinWedges || []).join(', '))}" placeholder="100, 200, 50, 300">
+        <input class="txt" id="spin-wedges" value="${esc((s.spinWedges || []).map((w) => (typeof w === 'object' ? (w.stock ? `${w.label} x${w.stock}` : w.label) : w)).join(', '))}" placeholder="Mug x25, T-shirt x10, 100">
         <button class="btn" id="spin-wedges-btn">Save wheel</button>
+        ${data.spinStock?.length ? `<p class="fine">🎁 Left to win: ${data.spinStock.map((x) => `<b>${esc(x.label)}</b> ${x.left}/${x.stock}`).join(' · ')}</p>` : ''}
       </div>
     </div>
     <div class="ctl">
@@ -157,7 +158,7 @@ function renderControls() {
     act(() => call('/api/admin/reveal', { method: 'POST', body: { count: n } }), '🏆 Reveal started on the big screen');
   };
   $('#tries').onchange = (e) => saveSettings({ attemptsPerGame: Number(e.target.value) });
-  $('#spin-wedges-btn').onclick = () => saveSettings({ spinWedges: $('#spin-wedges').value.split(/[,\s]+/).filter(Boolean).map(Number) }, '🎡 Wheel saved');
+  $('#spin-wedges-btn').onclick = () => saveSettings({ spinWedges: $('#spin-wedges').value.split(',').map((x) => x.trim()).filter(Boolean) }, '🎡 Wheel saved');
   c.querySelectorAll('[data-net]').forEach((b) =>
     b.addEventListener('click', () => saveSettings({ networkOpen: b.dataset.net === '1' }, b.dataset.net === '1' ? '🔗 Power Connections is ON' : '⏹ Power Connections stopped')),
   );
@@ -422,7 +423,7 @@ function renderPlayers() {
         <td>${esc(p.chapter) || '<span class="muted">–</span>'}</td>
         ${showPhone ? `<td>${esc(p.phone) || '<span class="muted">–</span>'}</td>` : ''}
         ${showTeam ? `<td>${esc(p.team) || '<span class="muted">–</span>'}</td>` : ''}
-        ${data.games.map((g) => `<td class="num">${(g.id === 'network' ? p.connections : p.scores[g.id]) || '<span class="muted">–</span>'}</td>`).join('')}
+        ${data.games.map((g) => `<td class="num">${esc(String((g.id === 'network' ? p.connections : g.id === 'spin' ? p.spinPrize : p.scores[g.id]) || '')) || '<span class="muted">–</span>'}</td>`).join('')}
         <td class="num total">${fmt(p.total)}</td>
         <td class="num">${p.tries}</td>
         <td><span class="muted">${new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></td>

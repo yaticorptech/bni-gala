@@ -19,7 +19,7 @@ const S = {
   games: [],
   me: null, // { player, games, teamDetail, total, rank, ranked, hidden, top, team, above }
   view: 'boot',
-  joinTab: 'login', // which door the join view shows
+  joinTab: 'register', // which door the join view shows — new players first
   prefillPhone: '', // carried from a failed login into the register form
   round: null, // Team Tap Battle round state from the server
   roundAt: 0, // performance.now() when `round` arrived — timers run from there
@@ -112,7 +112,7 @@ function chapterFieldHtml() {
 
 function renderJoin() {
   const s = S.settings;
-  const login = S.joinTab !== 'register';
+  const login = S.joinTab === 'login'; // "New player" is the default tab — most guests are registering
   const canSubmit = login || s.chapters.length > 0; // registering needs the chapter dropdown filled in
   const phoneField = `<label class="field"><span>Your mobile number *</span>
         <input name="phone" type="tel" inputmode="numeric" autocomplete="tel" required maxlength="10" pattern="[0-9]{10}" placeholder="10-digit number" value="${esc(S.prefillPhone)}"></label>`;

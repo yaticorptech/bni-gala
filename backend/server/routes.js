@@ -74,6 +74,8 @@ module.exports = function createRoutes(state, { connections, storage }) {
 
   // The welcome spin: one guaranteed prize per player, decided server-side (see state.spin).
   r.post('/spin', playerAuth, (req, res) => res.json(state.spin(req.player)));
+  // The prize desk taps Claim on the winner's phone: marks the coupon used, once and forever.
+  r.post('/spin/claim', playerAuth, (req, res) => res.json(state.claimSpin(req.player)));
 
   // Power Connections (networking): my QR code + members met, and connecting by scanned/typed code.
   r.get('/connections', playerAuth, (req, res) => res.json(state.connections(req.player)));

@@ -231,6 +231,19 @@ function miniBoardHtml() {
   return `<h3><span class="live-dot"></span> Live top 5</h3>${rows}`;
 }
 
+/** The sponsor logo for a prize label, e.g. "Hangyo" → its strip logo. Null when we have none. */
+function prizeLogo(prize) {
+  const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const p = norm(prize);
+  if (!p) return null;
+  const hit = (S.sponsors || []).find((x) => {
+    if (!x.img) return false;
+    const n = norm(x.name);
+    return n === p || n.startsWith(p) || p.startsWith(n);
+  });
+  return hit ? hit.img : null;
+}
+
 /** The sponsor strip: logos (or styled names) gliding by on a seamless loop. */
 function sponsorsHtml() {
   const list = S.sponsors || [];
@@ -394,14 +407,19 @@ function renderProfile() {
         ${me.teamDetail ? `<div>👥 Team ${esc(me.teamDetail.name)}</div>` : ''}
       </div>
     </section>
-    <section class="prize-ticket">
+    <section class="prize-ticket ${me.spin?.claimed ? 'claimed' : ''}">
+      ${me.spin?.claimed ? '<span class="claim-stamp">CLAIMED ✓</span>' : ''}
       <div class="eyebrow">🎡 My Spin &amp; Win prize</div>
       ${me.spin?.spun
         ? /^\d+$/.test(String(me.spin.prize))
           ? `<div class="pf-prize">+${fmt(me.spin.prize)}</div>
              <p class="fine center">points, won on your welcome spin — already on your score 🎉</p>`
-          : `<div class="pf-prize text">🎁 ${esc(String(me.spin.prize))}</div>
-             <p class="fine center">Show this ticket at the prize desk to collect it!</p>`
+          : `${prizeLogo(me.spin.prize) ? `<img class="pf-prize-logo" src="${esc(prizeLogo(me.spin.prize))}" alt="" onerror="this.remove()">` : ''}
+             <div class="pf-prize text">🎁 ${esc(String(me.spin.prize))}</div>
+             ${me.spin.claimed
+               ? '<p class="fine center">✅ Collected at the prize desk — enjoy!</p>'
+               : `<p class="fine center">Show this ticket at the prize desk to collect it.</p>
+                  <button class="btn btn-gold" id="pf-claim">✅ Claim gift</button>`}`
         : `<p class="fine center">You haven't had your welcome spin yet — one free spin, guaranteed prize!</p>
            <button class="btn btn-gold" id="pf-spin">🎡 Spin now</button>`}
     </section>
@@ -422,6 +440,29 @@ function renderProfile() {
   $('#pf-back').onclick = backToHub;
   const spin = $('#pf-spin');
   if (spin) spin.onclick = () => renderSpin();
+  const claim = $('#pf-claim');
+  if (claim) {
+    claim.onclick = async () => {
+      sfx.unlock();
+      // One-way: only the prize desk should tap this, while handing over the gift.
+      const sure = await modal({
+        title: '🎁 Claim this gift?',
+        html: '<p class="fine">Tap <b>Yes</b> only at the prize desk, while collecting your gift — the coupon is marked USED and cannot be claimed again.</p>',
+        ok: 'Yes, claim it',
+        cancel: 'Not yet',
+      });
+      if (!sure) return;
+      try {
+        await api('/api/spin/claim', { method: 'POST' });
+      } catch (err) {
+        if (err.status === 401) return signedOut('Please log in again');
+        return toast(err.message);
+      }
+      sfx.win();
+      confetti({ duration: 1200, count: 70 });
+      enterProfile(); // re-render with the CLAIMED stamp
+    };
+  }
 }
 
 /** Live update from the socket without re-rendering the whole hub. */
@@ -662,10 +703,11 @@ async function doSpin() {
   $('#spin-go').onclick = backToHub;
   // The big moment gets a pop-up of its own: what they won, front and centre.
   await sleep(500);
+  const logo = isPts ? null : prizeLogo(res.prize);
   await modal({
     title: '🎉 Congratulations!',
     html: `<div class="win-pop">
-        <div class="win-pop-emoji">${isPts ? '🪙' : '🎁'}</div>
+        ${logo ? `<img class="win-pop-logo" src="${esc(logo)}" alt="" onerror="this.outerHTML='<div class=win-pop-emoji>🎁</div>'">` : `<div class="win-pop-emoji">${isPts ? '🪙' : '🎁'}</div>`}
         <div class="win-pop-prize">${isPts ? `+${fmt(res.prize)} points` : esc(res.prize)}</div>
         <p class="fine center">${isPts ? 'Added straight to your score — well spun!' : 'Your gift is saved on your profile ticket — show it at the prize desk to collect it!'}</p>
       </div>`,

@@ -483,7 +483,7 @@ class GameState extends EventEmitter {
     }
     const spun = this.spinAttempt(player.id);
     const connections = this.networkAttempt(player.id)?.meta.met.length ?? 0; // a count, never points
-    return { player: publicPlayer(player), games, connections, spin: { spun: Boolean(spun), prize: spun ? spun.meta?.label ?? spun.score : null }, teamDetail: this.teamDetail(player), ...this.livePayload(player.id) };
+    return { player: publicPlayer(player), games, connections, spin: { spun: Boolean(spun), prize: spun ? spun.meta?.label ?? spun.score : null, claimed: Boolean(spun?.meta?.claimedAt) }, teamDetail: this.teamDetail(player), ...this.livePayload(player.id) };
   }
 
   // ------------------------------------------------------------- power connections (networking)
@@ -629,6 +629,18 @@ class GameState extends EventEmitter {
     this.recent.length = Math.min(this.recent.length, 12);
     this.emit('activity', item);
     return { already: false, prize, points, index, wedges: labels };
+  }
+
+  /** Prize desk: mark the player's spin gift as collected. One-way and idempotent. */
+  claimSpin(player) {
+    const a = this.spinAttempt(player.id);
+    if (!a) throw new HttpError(400, 'No spin prize to claim yet — spin first!');
+    if (!a.meta.claimedAt) {
+      a.meta.claimedAt = Date.now();
+      this.persist('saveAttempt', a);
+      this.changed();
+    }
+    return { ok: true, claimedAt: a.meta.claimedAt };
   }
 
   /** The full team view for its member: join code, member list, per-game team points and tries. */
@@ -1481,7 +1493,7 @@ class GameState extends EventEmitter {
         total: row?.total ?? 0,
         scores: row?.scores ?? {},
         connections: this.networkAttempt(p.id)?.meta.met.length ?? 0,
-        spinPrize: (() => { const sp = this.spinAttempt(p.id); return sp ? String(sp.meta?.label ?? sp.score) : ''; })(),
+        spinPrize: (() => { const sp = this.spinAttempt(p.id); return sp ? String(sp.meta?.label ?? sp.score) + (sp.meta?.claimedAt ? ' ✓' : '') : ''; })(),
         tries: Object.values(used).reduce((a, b) => a + b, 0),
         teamTries: Object.values(usedTeam).reduce((a, b) => a + b, 0),
       };

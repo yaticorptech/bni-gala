@@ -717,6 +717,25 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 
 /* the "you won!" pop-up after the spin */
 .win-pop { text-align: center; padding: 6px 0 2px; }
+.win-pop-logo {
+  display: block;
+  margin: 2px auto 4px;
+  height: 64px; width: auto; max-width: 230px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 12px;
+  padding: 7px 12px;
+  animation: winPopBounce 0.9s cubic-bezier(.2, 1.6, .4, 1);
+}
+.pf-prize-logo {
+  display: block;
+  margin: 6px auto 2px;
+  height: 58px; width: auto; max-width: 220px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 10px;
+  padding: 6px 10px;
+}
 .win-pop-emoji { font-size: 3.6rem; line-height: 1; animation: winPopBounce 0.9s cubic-bezier(.2, 1.6, .4, 1); }
 @keyframes winPopBounce { 0% { transform: scale(0) rotate(-20deg); } 60% { transform: scale(1.25) rotate(6deg); } }
 .win-pop-prize {
@@ -802,6 +821,21 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 }
 .prize-ticket::before { left: -13px; transform: translateY(-50%); }
 .prize-ticket::after { right: -13px; transform: translateY(-50%); }
+.prize-ticket.claimed { opacity: 0.85; }
+.prize-ticket.claimed .pf-prize { text-decoration: none; filter: grayscale(0.25); }
+.claim-stamp {
+  position: absolute;
+  top: 10px; right: 12px;
+  transform: rotate(10deg);
+  border: 2px solid #22c55e;
+  color: #4ade80;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-weight: 900;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  background: rgba(34, 197, 94, 0.1);
+}
 .pf-prize.text { font-size: 1.9rem; line-height: 1.25; padding: 6px 0; }
 .pf-prize {
   font-size: 3rem;

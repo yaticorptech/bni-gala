@@ -1433,6 +1433,8 @@ class GameState extends EventEmitter {
       leaders: GAMES.filter((g) => !g.bonus).map((g) => ({ gameId: g.id, ...(leaders[g.id] || {}) })), // no "champion" of a luck bonus
       chapters: [...chapterMap.values()].sort((x, y) => y.total - x.total),
       topConnectors,
+      // Each handshake sits in both members' met lists, so the room's total is half the sum.
+      connectionPairs: Math.round([...connections.values()].reduce((a, b) => a + b, 0) / 2),
       plays: finished.length,
     };
     if (includeLive) this.cache = result;
@@ -1444,7 +1446,7 @@ class GameState extends EventEmitter {
   screenPayload() {
     const s = this.settings;
     const board = this.board();
-    const base = { mode: s.screenMode, title: s.eventTitle, tagline: s.tagline, playOpen: s.playOpen, players: this.players.size, plays: board.plays };
+    const base = { mode: s.screenMode, title: s.eventTitle, tagline: s.tagline, playOpen: s.playOpen, players: this.players.size, plays: board.plays, connections: board.connectionPairs };
     // The team battle, live quiz and lucky draw ride on top of whichever view is showing.
     const overlays = { teamBattle: this.teams.size ? this.teamSummary() : null, live: this.liveQuizPayload() };
     if (s.screenMode === 'hidden') return { ...base, ...overlays };

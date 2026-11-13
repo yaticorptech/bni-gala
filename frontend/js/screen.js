@@ -60,6 +60,7 @@ function setHeader(p) {
   if ('tagline' in p) $('#tagline').textContent = p.tagline || '';
   if ('players' in p) $('#stat-players').textContent = fmt(p.players);
   if ('plays' in p) $('#stat-plays').textContent = fmt(p.plays);
+  if ('connections' in p) $('#stat-connections').textContent = fmt(p.connections || 0);
   if ('playing' in p) {
     const n = (p.playing || []).length;
     $('#stat-playing').textContent = fmt(n);

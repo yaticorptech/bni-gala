@@ -1,5 +1,5 @@
 [
-  { "name": "Digital Planet" },
+  { "name": "Digital Planet", "img": "img/sponsors/digital-planet.png" },
   { "name": "Frame It", "img": "img/sponsors/frameit.png" },
   { "name": "Modicare", "img": "img/sponsors/modicare.png" },
   { "name": "Nandi Oil", "img": "img/sponsors/nandi-oil.png" },

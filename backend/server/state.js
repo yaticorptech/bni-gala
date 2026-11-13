@@ -43,7 +43,7 @@ const DEFAULT_TEAM_GAMES = ['frenzy', 'rush', 'colors', 'odd'];
 
 const defaultSettings = () => ({
   eventTitle: config.defaultTitle,
-  tagline: 'Play solo · Play for your team · Win the night!',
+  tagline: 'Play · Win the night!',
   playOpen: true,
   screenMode: 'live', // live | hidden | reveal
   revealCount: 10,

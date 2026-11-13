@@ -27,5 +27,5 @@ module.exports = {
   pictionaryFile: path.join(root, 'config', 'pictionary.json'),
   // Served too when present (local/laptop mode); absent when only backend/ is deployed.
   frontendDir: path.join(root, '..', 'frontend'),
-  defaultTitle: env.EVENT_TITLE || 'BNI Gala Award Night',
+  defaultTitle: env.EVENT_TITLE || 'BNI Gala Awards',
 };

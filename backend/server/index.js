@@ -53,7 +53,7 @@ async function main() {
     // /screen → screen.html, /admin → admin.html
     app.use(express.static(config.frontendDir, { extensions: ['html'] }));
   } else {
-    app.get('/', (_req, res) => res.json({ ok: true, service: 'BNI Gala Award Night API' }));
+    app.get('/', (_req, res) => res.json({ ok: true, service: 'BNI Gala Awards API' }));
   }
   // Errors raised before the API router (e.g. malformed JSON bodies).
   // eslint-disable-next-line no-unused-vars
@@ -67,7 +67,7 @@ async function main() {
     const ip = lanIp();
     const local = `http://localhost:${config.port}`;
     const lan = ip ? `http://${ip}:${config.port}` : null;
-    console.log(`\n🏆 BNI Gala Award Night running — storage: ${store.describe()}`);
+    console.log(`\n🏆 BNI Gala Awards running — storage: ${store.describe()}`);
     if (servingFrontend) {
       console.log(`   Players (phones): ${config.publicUrl || lan || local}/`);
       console.log(`   Big screen:       ${local}/screen`);

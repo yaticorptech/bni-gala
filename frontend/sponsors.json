@@ -1,7 +1,7 @@
 [
   { "name": "Digital Planet" },
   { "name": "Frameit" },
-  { "name": "Modicare" },
+  { "name": "Modicare", "img": "img/sponsors/modicare.png" },
   { "name": "Nandi Oil", "img": "img/sponsors/nandi-oil.png" },
   { "name": "Presto", "img": "img/sponsors/presto.png" },
   { "name": "DayToday" },

@@ -47,7 +47,7 @@ const defaultSettings = () => ({
   playOpen: true,
   screenMode: 'live', // live | hidden | reveal
   revealCount: 10,
-  attemptsPerGame: 3, // 0 = unlimited; every try adds to the total
+  attemptsPerGame: 1, // 0 = unlimited; every try adds to the total
   teamAttemptsPerGame: 2, // tries per member per team game (0 = unlimited)
   maxTeamSize: 5,
   enabledGames: GAMES.map((g) => g.id),

@@ -949,7 +949,7 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 #spin-wheel {
   display: block; width: 100%; aspect-ratio: 1; border-radius: 50%;
   box-shadow: 0 0 0 4px rgba(90, 49, 21, 0.55), 0 18px 50px rgba(0, 0, 0, 0.5);
-  transition: transform 4.5s cubic-bezier(0.15, 0.7, 0.1, 1);
+  transition: transform 6s cubic-bezier(0.15, 0.7, 0.1, 1);
   will-change: transform;
 }
 #spin-wheel text { fill: #fff; font-weight: 900; text-anchor: middle; paint-order: stroke; stroke: rgba(0, 0, 0, 0.45); stroke-width: 2px; }

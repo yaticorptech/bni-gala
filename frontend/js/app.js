@@ -681,14 +681,20 @@ async function doSpin() {
   sfx.whoosh(); // the wheel takes off
   vibrate(20);
   const wedges = res.wedges || SPIN_FALLBACK;
-  // Six full turns, then stop with the winning wedge's centre under the pointer (4.5 s ease in the CSS).
+  // Six full turns over 6 seconds (the CSS transition), stopping with the winning wedge's
+  // centre under the pointer.
   $('#spin-wheel').style.transform = `rotate(${360 * 6 - (res.index + 0.5) * (360 / wedges.length)}deg)`;
-  for (let i = 0; i < 16; i++) {
-    sfx.tick(); // the wheel "clicks" as it slows
-    await sleep(70 + i * 20);
+  // The flapper clicks along with the wheel — a burst of fast ticks that slows as it does.
+  const t0 = performance.now();
+  let gap = 45;
+  while (performance.now() - t0 < 4500) {
+    sfx.tick();
+    if (gap > 160) vibrate(5); // feel the last few clicks
+    await sleep(gap);
+    gap = Math.min(400, gap * 1.09);
   }
-  sfx.drumroll(1.0); // suspense as it creeps onto the wedge
-  await sleep(1200);
+  sfx.drumroll(1.3); // suspense as it creeps onto the winning wedge
+  await sleep(1500);
   const isPts = /^\d+$/.test(String(res.prize));
   if (!isPts || Number(res.prize) >= 250) sfx.fanfare(); // gifts and big wedges get the brass
   else sfx.win();

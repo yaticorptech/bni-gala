@@ -2,10 +2,10 @@
   { "name": "Digital Planet" },
   { "name": "Frameit" },
   { "name": "Modicare" },
-  { "name": "Nandi Oil" },
+  { "name": "Nandi Oil", "img": "img/sponsors/nandi-oil.png" },
   { "name": "Presto" },
   { "name": "DayToday" },
-  { "name": "Aabhejya Twam" },
+  { "name": "Abhekhya Twam" },
   { "name": "Yaticorp" },
   { "name": "Hangyo" }
 ]

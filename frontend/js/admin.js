@@ -84,11 +84,35 @@ function renderControls() {
       <div class="ctl-body"><select id="tries">${triesOpts}</select></div>
     </div>
     <div class="ctl">
-      <div class="ctl-label">Solo games available</div>
-      <div class="ctl-body">${data.games
-        .filter((g) => !g.hosted && !g.bonus && !g.social) // Live Quiz, welcome spin and Power Connections are always on
-        .map((g) => `<label class="check"><input type="checkbox" data-game="${g.id}" ${s.enabledGames.includes(g.id) ? 'checked' : ''}> ${g.emoji} ${esc(g.name)}</label>`)
-        .join('')}</div>
+      <div class="ctl-label">Spin &amp; Win wheel<small>The welcome-spin prizes, clockwise from the top — 2 to 12 numbers (0 to 1000), comma separated. Changes apply to everyone who hasn’t spun yet.</small></div>
+      <div class="ctl-body">
+        <input class="txt" id="spin-wedges" value="${esc((s.spinWedges || []).join(', '))}" placeholder="100, 200, 50, 300">
+        <button class="btn" id="spin-wedges-btn">Save wheel</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <div class="ctl-label">Power Connections<small>Start and stop the networking game — scans only count while it's running</small></div>
+      <div class="ctl-body">
+        <div class="seg">
+          <button data-net="1" class="${s.networkOpen !== false ? 'on' : ''}">▶ Start</button>
+          <button data-net="0" class="${s.networkOpen === false ? 'on red' : ''}">⏹ Stop</button>
+        </div>
+      </div>
+    </div>
+    <div class="ctl">
+      <div class="ctl-label">Solo games<small>Open games one by one, or run them all at once. 🏆 End closes a game and announces its champion (best single try) on the big screen.</small></div>
+      <div class="ctl-body">
+        <button class="btn" id="games-all-on">▶ Open all</button>
+        <button class="btn" id="games-all-off">⏸ Close all</button>
+        ${data.games
+          .filter((g) => !g.hosted && !g.bonus && !g.social) // Live Quiz, welcome spin and Power Connections are always on
+          .map((g) => {
+            const opening = data.pendingIntro?.gameId === g.id; // its intro is on the big screen right now
+            return `<span class="game-row"><label class="check"><input type="checkbox" data-game="${g.id}" ${s.enabledGames.includes(g.id) || opening ? 'checked' : ''} ${opening ? 'disabled' : ''}> ${g.emoji} ${esc(g.name)}${opening ? ' <small>🎬 opening…</small>' : ''}</label>
+              <button class="btn end-btn" data-end="${g.id}" data-name="${esc(g.name)}" title="Close ${esc(g.name)} and announce its champion on the big screen">🏆 End</button></span>`;
+          })
+          .join('')}
+      </div>
     </div>
     <div class="ctl">
       <div class="ctl-label">Team games<small>Played "for the team" — points go to the team board</small></div>
@@ -133,12 +157,29 @@ function renderControls() {
     act(() => call('/api/admin/reveal', { method: 'POST', body: { count: n } }), '🏆 Reveal started on the big screen');
   };
   $('#tries').onchange = (e) => saveSettings({ attemptsPerGame: Number(e.target.value) });
+  $('#spin-wedges-btn').onclick = () => saveSettings({ spinWedges: $('#spin-wedges').value.split(/[,\s]+/).filter(Boolean).map(Number) }, '🎡 Wheel saved');
+  c.querySelectorAll('[data-net]').forEach((b) =>
+    b.addEventListener('click', () => saveSettings({ networkOpen: b.dataset.net === '1' }, b.dataset.net === '1' ? '🔗 Power Connections is ON' : '⏹ Power Connections stopped')),
+  );
   $('#team-tries').onchange = (e) => saveSettings({ teamAttemptsPerGame: Number(e.target.value) });
   $('#team-size').onchange = (e) => saveSettings({ maxTeamSize: Number(e.target.value) });
   c.querySelectorAll('[data-game]').forEach((box) =>
     box.addEventListener('change', () => {
-      const enabledGames = [...c.querySelectorAll('[data-game]:checked')].map((x) => x.dataset.game);
-      saveSettings({ enabledGames });
+      if (box.checked) {
+        // Opening plays the game's intro on the big screen first; it unlocks when the countdown ends.
+        act(() => call(`/api/admin/games/${box.dataset.game}/open`, { method: 'POST' }), '🎬 Intro is on the big screen — the game opens right after');
+      } else {
+        const enabledGames = [...c.querySelectorAll('[data-game]:checked')].map((x) => x.dataset.game);
+        saveSettings({ enabledGames });
+      }
+    }),
+  );
+  $('#games-all-on').onclick = () => saveSettings({ enabledGames: [...c.querySelectorAll('[data-game]')].map((x) => x.dataset.game) }, '▶ All games opened');
+  $('#games-all-off').onclick = () => saveSettings({ enabledGames: [] }, '⏸ All games closed');
+  c.querySelectorAll('[data-end]').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (!confirm(`End ${b.dataset.name}? New tries close and its champion is announced on the big screen.`)) return;
+      act(() => call(`/api/admin/games/${b.dataset.end}/end`, { method: 'POST' }), `🏆 ${b.dataset.name} champion is on the big screen`);
     }),
   );
   c.querySelectorAll('[data-teamgame]').forEach((box) =>
@@ -381,7 +422,7 @@ function renderPlayers() {
         <td>${esc(p.chapter) || '<span class="muted">–</span>'}</td>
         ${showPhone ? `<td>${esc(p.phone) || '<span class="muted">–</span>'}</td>` : ''}
         ${showTeam ? `<td>${esc(p.team) || '<span class="muted">–</span>'}</td>` : ''}
-        ${data.games.map((g) => `<td class="num">${p.scores[g.id] ?? '<span class="muted">–</span>'}</td>`).join('')}
+        ${data.games.map((g) => `<td class="num">${(g.id === 'network' ? p.connections : p.scores[g.id]) || '<span class="muted">–</span>'}</td>`).join('')}
         <td class="num total">${fmt(p.total)}</td>
         <td class="num">${p.tries}</td>
         <td><span class="muted">${new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></td>
@@ -472,6 +513,7 @@ function start() {
   refresh();
   if (!socket) {
     socket = connectSocket({ role: 'admin' });
+    socket.on('connect', scheduleRefresh); // a reconnect usually means the server restarted: re-pull, never sit stale
     socket.on('changed', scheduleRefresh);
     socket.on('settings', scheduleRefresh);
     socket.on('round', (r) => {

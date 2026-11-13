@@ -152,9 +152,9 @@ const GAMES = [
     name: 'Power Connections',
     emoji: '🔗',
     color: '#0ea5e9',
-    tagline: 'Meet members, scan their QR — every connection scores!',
+    tagline: 'Meet members, scan their QR — build your connections!',
     duration: 'all night',
-    howTo: ['Open your QR and show it to members you meet', 'Scan theirs with the in-app scanner or any camera app — or type their code', 'Every new member you connect with pays you BOTH 50 points', 'Once connected, save their number to your phone with one tap 📇', 'Each pair counts once · up to 1,000 — that’s 20 real connections'],
+    howTo: ['Open your QR and show it to members you meet', 'Scan theirs with the in-app scanner or any camera app — or type their code', 'Every new member you connect with counts for you BOTH', 'No points here — just the count. Build the biggest network in the room!'],
     social: true,
     minMs: 0,
     score() {
@@ -296,6 +296,122 @@ const GAMES = [
     score: pictionary.score,
   },
   {
+    id: 'math',
+    name: 'Quick Maths',
+    emoji: '🧮',
+    color: '#10b981',
+    tagline: 'Easy sums — tap the right answer, fast!',
+    duration: '30 sec',
+    howTo: ['A simple sum appears with four answers', 'Tap the right one (+35) · wrong −15', 'They start easy and grow a little as you go'],
+    minMs: 28000,
+    score(r) {
+      const correct = count(r.correct, 80, 'correct');
+      const wrong = count(r.wrong, 80, 'wrong');
+      if (correct + wrong > 80) throw invalid('too many answers');
+      return { score: clamp(correct * 35 - wrong * 15, 0, MAX), meta: { correct, wrong } };
+    },
+  },
+  {
+    id: 'timing',
+    name: 'Perfect Timing',
+    emoji: '⏱️',
+    color: '#f59e0b',
+    tagline: 'Stop the clock on exactly 5.00 seconds!',
+    duration: '3 rounds',
+    howTo: ['Tap to start the clock — it hides after 2 seconds', 'Keep counting in your head and tap again on exactly 5.00', 'The closer you stop it, the more points — 3 rounds'],
+    minMs: 3000,
+    score(r, { elapsedMs }) {
+      if (!Array.isArray(r.times) || r.times.length !== 3) throw invalid('times');
+      const times = r.times.map((t) => millis(t, 30000, 'time'));
+      if (times.reduce((a, b) => a + b, 0) > elapsedMs + 2000) throw invalid('timing');
+      const offs = times.map((t) => Math.abs(t - 5000));
+      const pts = offs.reduce((s, o) => s + Math.max(0, 334 - Math.ceil(o / 2)), 0); // 334 a round, −1 per 2ms off
+      return { score: clamp(pts, 0, MAX), meta: { avgOffMs: Math.round(offs.reduce((a, b) => a + b, 0) / offs.length), bestOffMs: Math.min(...offs) } };
+    },
+  },
+  {
+    id: 'hunt',
+    name: 'Number Hunt',
+    emoji: '🔢',
+    color: '#8b5cf6',
+    tagline: 'Find 1 to 20 in order — beat the clock!',
+    duration: '60 sec max',
+    howTo: ['Numbers 1 to 20 are scattered on the grid', 'Tap them in order, starting from 1', 'Faster = more points · wrong taps cost a little'],
+    minMs: 5000,
+    score(r, { elapsedMs }) {
+      const found = count(r.found, 20, 'found');
+      const wrong = count(r.wrong, 200, 'wrong');
+      const timeMs = millis(r.timeMs, 65000, 'timeMs');
+      if (timeMs > elapsedMs + 2000) throw invalid('timing');
+      if (found < 20) return { score: found * 10, meta: { found, wrong, timeMs, completed: false } };
+      if (timeMs < 5000) throw invalid('too fast');
+      const raw = 1000 - Math.max(0, timeMs / 1000 - 18) * 35 - wrong * 15;
+      return { score: clamp(Math.round(raw), 150, MAX), meta: { found, wrong, timeMs, completed: true } };
+    },
+  },
+  {
+    id: 'balloons',
+    name: 'Balloon Burst',
+    emoji: '🎈',
+    color: '#f43f5e',
+    tagline: 'Pop the balloons before they float away!',
+    duration: '30 sec',
+    howTo: ['Balloons drift up the screen — pop them with a tap (+20)', 'Golden ⭐ balloons are worth +50', 'No penalties — pop everything you can!'],
+    minMs: 28000,
+    score(r) {
+      const popped = count(r.popped, 70, 'popped');
+      const golden = count(r.golden, 15, 'golden');
+      return { score: clamp(popped * 20 + golden * 50, 0, MAX), meta: { popped, golden } };
+    },
+  },
+  {
+    id: 'bullseye',
+    name: 'Bullseye',
+    emoji: '🎯',
+    color: '#d946ef',
+    tagline: 'Stop the slider dead centre!',
+    duration: '10 rounds',
+    howTo: ['A marker sweeps across the bar — tap to stop it', 'Dead centre = 100 · the gold zone still pays well', 'It sweeps faster every round — 10 rounds'],
+    minMs: 8000,
+    score(r) {
+      if (!Array.isArray(r.offsets) || r.offsets.length !== 10) throw invalid('offsets');
+      const offsets = r.offsets.map((o) => count(o, 50, 'offset')); // distance from centre, 0–50
+      const pts = offsets.reduce((s, o) => s + (o <= 3 ? 100 : clamp(Math.round(100 - o * 2.5), 0, 95)), 0);
+      return { score: clamp(pts, 0, MAX), meta: { bulls: offsets.filter((o) => o <= 3).length, avgOff: Math.round(offsets.reduce((a, b) => a + b, 0) / offsets.length) } };
+    },
+  },
+  {
+    id: 'cups',
+    name: 'Follow the Lead',
+    emoji: '💼',
+    color: '#14b8a6',
+    tagline: 'Which briefcase hides the lead? Keep watching!',
+    duration: '5 rounds',
+    howTo: ['A 💰 lead goes under one of three briefcases', 'They shuffle — keep your eye on the right one', 'Tap where it ended up · +200 a find · 5 rounds'],
+    minMs: 12000,
+    score(r) {
+      const correct = count(r.correct, 5, 'correct');
+      return { score: clamp(correct * 200, 0, MAX), meta: { correct, rounds: 5 } };
+    },
+  },
+  {
+    id: 'higher',
+    name: 'Higher or Lower',
+    emoji: '🃏',
+    color: '#6366f1',
+    tagline: 'Call the next card — higher or lower?',
+    duration: '30 sec',
+    howTo: ['A card shows — will the next one be higher or lower?', 'Right +60 · wrong −20', 'Aces are low, kings are high — play the odds!'],
+    minMs: 28000,
+    score(r) {
+      const correct = count(r.correct, 40, 'correct');
+      const wrong = count(r.wrong, 40, 'wrong');
+      const streak = count(r.streak ?? 0, 40, 'streak'); // cosmetic, for the result line
+      if (correct + wrong > 40) throw invalid('too many answers');
+      return { score: clamp(correct * 60 - wrong * 20, 0, MAX), meta: { correct, wrong, streak } };
+    },
+  },
+  {
     // Bonus: every player gets one free spin of the wheel when they first arrive. The prize
     // is picked server-side (state.spin) — never started through startAttempt, never a game card.
     id: 'spin',
@@ -304,9 +420,9 @@ const GAMES = [
     color: '#f7c548',
     tagline: 'One free spin — welcome points for everyone!',
     duration: 'one spin',
-    howTo: ['Every player gets one spin of the wheel on arrival', 'Whatever it lands on is yours — 50 to 300 points', 'The points count on your solo score'],
+    howTo: ['Every player gets one spin of the wheel on arrival', 'Whatever it lands on is yours', 'The points count on your solo score'],
     bonus: true,
-    wedges: [100, 200, 50, 300, 75, 250, 125, 150], // what the wheel says, clockwise from the top
+    wedges: [100, 200, 50, 300, 75, 250, 125, 150], // the default wheel — the organiser can change the prizes in the admin settings
     minMs: 0,
     score() {
       throw new HttpError(403, 'The welcome spin is credited by the server', 'BONUS');

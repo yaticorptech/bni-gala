@@ -1,7 +1,6 @@
 const express = require('express');
 const QRCode = require('qrcode');
 const config = require('./config');
-const { publicGames } = require('./games');
 const { HttpError, safeEqual, lanIp } = require('./util');
 
 /** The address phones should open: PUBLIC_URL, else this laptop's Wi-Fi IP, else the request host. */
@@ -46,7 +45,7 @@ module.exports = function createRoutes(state, { connections, storage }) {
   // ---------------------------------------------------------- public
 
   r.get('/state', (req, res) => {
-    res.json({ settings: state.publicSettings(), games: publicGames(), joinUrl: joinUrl(req) });
+    res.json({ settings: state.publicSettings(), games: state.gamesPayload(), joinUrl: joinUrl(req) });
   });
 
   r.get('/qr.svg', async (req, res, next) => {
@@ -79,33 +78,6 @@ module.exports = function createRoutes(state, { connections, storage }) {
   // Power Connections (networking): my QR code + members met, and connecting by scanned/typed code.
   r.get('/connections', playerAuth, (req, res) => res.json(state.connections(req.player)));
   r.post('/connect', playerAuth, (req, res) => res.json(state.connect(req.player, req.body?.code)));
-
-  // A connected member's contact as a vCard — "save their number to my phone". Only for
-  // members the caller has actually connected with (state.contactCard enforces it).
-  // ?name=… is what the saver typed; the server prefixes it with "BNI <chapter>".
-  r.get('/contact/:code', playerAuth, (req, res) => {
-    const { name, vcf } = state.contactCard(req.player, req.params.code, req.query.name);
-    res
-      .type('text/vcard; charset=utf-8')
-      .set('Content-Disposition', `attachment; filename="${name.replace(/[^\w .-]/g, '')}.vcf"`)
-      .send(vcf);
-  });
-
-  // Mint a short-lived open-the-contact link (see state.contactLink) …
-  r.post('/contact/:code/link', playerAuth, (req, res) => {
-    res.json(state.contactLink(req.player, req.params.code, req.body?.name));
-  });
-
-  // … which the phone then navigates to: served INLINE so iPhones open the contact natively
-  // ("Create New Contact") and Androids hand it straight to the contacts importer.
-  r.get('/vcf/:id', (req, res) => {
-    const { name, vcf } = state.vcfByLink(req.params.id);
-    res
-      .type('text/vcard; charset=utf-8')
-      .set('Content-Disposition', `inline; filename="${name.replace(/[^\w .-]/g, '')}.vcf"`)
-      .set('Cache-Control', 'no-store')
-      .send(vcf);
-  });
 
   // A member's personal QR, shown in their app. It encodes the join URL + #c=<code>, so any
   // phone camera app can scan it: the link opens this app, which connects automatically.
@@ -237,6 +209,16 @@ module.exports = function createRoutes(state, { connections, storage }) {
   r.delete('/admin/players/:id', adminAuth, (req, res) => {
     state.deletePlayer(req.params.id);
     res.json({ ok: true });
+  });
+
+  // Open a game the showy way: its intro plays on the big screen first, then it unlocks.
+  r.post('/admin/games/:id/open', adminAuth, (req, res) => {
+    res.json({ ok: true, ...state.openGame(req.params.id) });
+  });
+
+  // Close a game for new tries and announce its champion (best single try) on the big screen.
+  r.post('/admin/games/:id/end', adminAuth, (req, res) => {
+    res.json({ ok: true, ...state.endGame(req.params.id) });
   });
 
   // Scores, rounds, draws and quiz progress go; everyone stays logged in, teams stay.

@@ -81,6 +81,8 @@ module.exports = function attachRealtime(httpServer, state) {
   state.on('round', (round) => io.emit('round', round)); // screen, phones and admin all follow the battle
   state.on('livequiz', (q) => io.emit('livequiz', q));
   state.on('luckydraw', (draw) => io.emit('luckydraw', draw));
+  state.on('gamewinner', (w) => io.to('screen').emit('gamewinner', w));
+  state.on('gameintro', (gi) => io.emit('gameintro', gi)); // the screen shows it; phones get a "get ready" nudge
   state.on('reset', () => {
     leaderId = null;
     io.emit('reset');

@@ -18,6 +18,7 @@ const SCREEN_TOP = 10;
 const LIVE_TOP = 5;
 const REVEAL_SIZES = [3, 5, 10, 15];
 const LIVE_STALE_MS = 60000; // a game in progress that has gone quiet this long (phones re-send every 15 s) drops off the board
+const INTRO_MS = 18000; // how long the big screen shows a game's intro + live demo before the game unlocks
 
 // Player-created teams: whoever creates one gets the next colour/emoji from these.
 const TEAM_COLORS = ['#e3263a', '#3b82f6', '#22c55e', '#f7c548', '#a855f7', '#f97316', '#06b6d4', '#ec4899', '#84cc16', '#14b8a6', '#f43f5e', '#8b5cf6'];
@@ -39,7 +40,6 @@ const EMOJIS = ['🦁', '🐯', '🦊', '🐼', '🐨', '🦄', '🐸', '🐙', 
 const validEmoji = (e) => (EMOJIS.includes(e) ? e : '');
 
 const DEFAULT_TEAM_GAMES = ['frenzy', 'rush', 'colors', 'odd'];
-const CONNECT_POINTS = 50; // what BOTH members earn for a new connection (see connect())
 
 const defaultSettings = () => ({
   eventTitle: config.defaultTitle,
@@ -52,6 +52,8 @@ const defaultSettings = () => ({
   maxTeamSize: 5,
   enabledGames: GAMES.map((g) => g.id),
   teamGames: [...DEFAULT_TEAM_GAMES], // games that can be played "for the team"
+  spinWedges: [...GAME_MAP.spin.wedges], // welcome-spin prizes, clockwise from the top (admin-editable)
+  networkOpen: true, // Power Connections runs only while this is on (the admin's Start/Stop buttons)
   chapters: [], // join-form dropdown — players must pick one; empty list pauses registration
   teamScores: {}, // teamId → taps across all Tap Battle rounds
   teamRounds: [], // finished rounds [{ no, at, durationMs, taps: {teamId: n}, ranking, tie, tappers }]
@@ -63,7 +65,7 @@ const defaultSettings = () => ({
 });
 
 const publicPlayer = ({ id, name, emoji, business, chapter, teamId }) => ({ id, name, emoji: emoji || '', business, chapter, teamId: teamId || null });
-const publicRow = ({ rank, id, name, emoji, business, chapter, total, scores, live }) => ({ rank, id, name, emoji: emoji || '', business, chapter, total, scores, live: live || null });
+const publicRow = ({ rank, id, name, emoji, business, chapter, total, scores, live, connections }) => ({ rank, id, name, emoji: emoji || '', business, chapter, total, scores, live: live || null, connections: connections || 0 });
 const publicTeam = ({ id, name, emoji, color, chapter }) => ({ id, name, emoji, color, chapter: chapter || '' });
 
 /** A 10-digit Indian mobile number however it was typed (+91, spaces, dashes, a leading 0), else null. */
@@ -129,7 +131,6 @@ class GameState extends EventEmitter {
     this.roundTimers = [];
     this.live = null; // Live Quiz question on the big screen right now (see askLive)
     this.liveTimers = [];
-    this.vcfLinks = new Map(); // short-lived "open this contact" links (see contactLink)
     store.attach(() => this.snapshot());
     setInterval(() => this.sweep(), 60 * 1000).unref();
     setInterval(() => this.sweepLive(), 5 * 1000).unref();
@@ -212,14 +213,13 @@ class GameState extends EventEmitter {
     this.emit('change');
   }
 
-  /** Drop in-memory runtimes of abandoned games, and expired contact links. */
+  /** Drop in-memory runtimes of abandoned games. */
   sweep() {
     const cutoff = Date.now() - ATTEMPT_TTL_MS;
     for (const attemptId of this.runtimes.keys()) {
       const a = this.attempts.get(attemptId);
       if (!a || a.startedAt < cutoff) this.runtimes.delete(attemptId);
     }
-    for (const [linkId, l] of this.vcfLinks) if (l.expires < Date.now()) this.vcfLinks.delete(linkId);
   }
 
   /** Drop running scores that went quiet (phone died or was pocketed mid-game), so the row stops showing "playing". */
@@ -238,8 +238,13 @@ class GameState extends EventEmitter {
   // ------------------------------------------------------------- settings
 
   publicSettings() {
-    const { eventTitle, tagline, playOpen, screenMode, attemptsPerGame, teamAttemptsPerGame, maxTeamSize, enabledGames, teamGames, chapters } = this.settings;
-    return { eventTitle, tagline, playOpen, screenMode, attemptsPerGame, teamAttemptsPerGame, maxTeamSize, enabledGames, teamGames, chapters, emojis: EMOJIS };
+    const { eventTitle, tagline, playOpen, screenMode, attemptsPerGame, teamAttemptsPerGame, maxTeamSize, enabledGames, teamGames, chapters, spinWedges, networkOpen } = this.settings;
+    return { eventTitle, tagline, playOpen, screenMode, attemptsPerGame, teamAttemptsPerGame, maxTeamSize, enabledGames, teamGames, chapters, spinWedges, networkOpen: networkOpen !== false, emojis: EMOJIS };
+  }
+
+  /** The static game list, with the admin-set spin wheel patched in. */
+  gamesPayload() {
+    return publicGames().map((g) => (g.id === 'spin' ? { ...g, wedges: [...this.settings.spinWedges] } : g));
   }
 
   /** Ranks are secret while the board is hidden or being revealed — the team battle view is not a secret. */
@@ -284,6 +289,15 @@ class GameState extends EventEmitter {
     if ('screenMode' in patch) {
       if (!['live', 'hidden'].includes(patch.screenMode)) throw new HttpError(400, 'Screen mode must be live or hidden');
       s.screenMode = patch.screenMode;
+    }
+    if ('networkOpen' in patch) s.networkOpen = Boolean(patch.networkOpen);
+    if ('spinWedges' in patch) {
+      if (!Array.isArray(patch.spinWedges)) throw new HttpError(400, 'spinWedges must be a list');
+      const wedges = patch.spinWedges.map(Number);
+      if (wedges.length < 2 || wedges.length > 12 || wedges.some((n) => !Number.isInteger(n) || n < 0 || n > MAX)) {
+        throw new HttpError(400, `The wheel needs 2 to 12 whole numbers, each 0 to ${MAX}`);
+      }
+      s.spinWedges = wedges;
     }
     this.persist('saveSettings', s);
     this.emit('settings', this.publicSettings());
@@ -458,7 +472,8 @@ class GameState extends EventEmitter {
       games[g.id] = { points: row?.scores[g.id] ?? null, best: this.bestScore(player.id, g.id), used: used[g.id], left: this.attemptsLeft(used[g.id]) };
     }
     const spun = this.spinAttempt(player.id);
-    return { player: publicPlayer(player), games, spin: { spun: Boolean(spun), prize: spun?.score ?? null }, teamDetail: this.teamDetail(player), ...this.livePayload(player.id) };
+    const connections = this.networkAttempt(player.id)?.meta.met.length ?? 0; // a count, never points
+    return { player: publicPlayer(player), games, connections, spin: { spun: Boolean(spun), prize: spun?.score ?? null }, teamDetail: this.teamDetail(player), ...this.livePayload(player.id) };
   }
 
   // ------------------------------------------------------------- power connections (networking)
@@ -492,101 +507,47 @@ class GameState extends EventEmitter {
     return a;
   }
 
-  /** What the networking view shows: my code, my points, and the members I've met. */
+  /** What the networking view shows: my code and the members I've met — a count, not points. */
   connections(player) {
     const att = this.networkAttempt(player.id);
     const met = (att?.meta.met || [])
       .map((pid) => this.players.get(pid))
       .filter(Boolean)
-      .map(({ name, emoji, business, chapter, connectCode }) => ({ name, emoji: emoji || '', business, chapter, code: connectCode }));
-    return { code: player.connectCode, points: att?.score ?? 0, met, each: CONNECT_POINTS };
+      .map(({ name, emoji, business, chapter }) => ({ name, emoji: emoji || '', business, chapter }));
+    return { code: player.connectCode, met };
   }
 
-  /**
-   * A connected member's contact as a vCard, for "save their number to my phone". The number
-   * is only shared with members this player has actually connected with — showing your QR at
-   * the table is the consent. The saver types the name; the contact is always saved with a
-   * "BNI <chapter>" prefix so every member found tonight groups together in the phone.
-   */
-  contactCard(player, code, customName = '') {
-    const other = this.playerByConnectCode(code);
-    if (!other) throw new HttpError(404, 'No member found for that code');
-    const att = this.networkAttempt(player.id);
-    if (!att || !att.meta.met.includes(other.id)) {
-      throw new HttpError(403, 'Connect with them first — then you can save their contact', 'NOT_CONNECTED');
-    }
-    const typed = clean(customName, 40) || other.name;
-    const display = ['BNI', other.chapter, typed].filter(Boolean).join(' ');
-    const esc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, '\\$&').replace(/\r?\n/g, '\\n');
-    const note = [other.name, other.chapter, `Met at ${this.settings.eventTitle}`].filter(Boolean).join(' · ');
-    const vcf = [
-      'BEGIN:VCARD',
-      'VERSION:3.0',
-      `N:;${esc(display)};;;`,
-      `FN:${esc(display)}`,
-      other.phone && `TEL;TYPE=CELL:+91${other.phone}`,
-      other.business && `ORG:${esc(other.business)}`,
-      `NOTE:${esc(note)}`,
-      'END:VCARD',
-    ].filter(Boolean).join('\r\n');
-    return { name: display, vcf, phone: other.phone ? `+91${other.phone}` : '', company: other.business || '', notes: note };
-  }
-
-  /**
-   * A short-lived, no-auth link to a connected member's vCard, so the phone can NAVIGATE to
-   * it (navigations can't carry the login header) — that's what makes the contact open
-   * natively with Save/Create right there. Same access rule as contactCard.
-   */
-  contactLink(player, code, name) {
-    const card = this.contactCard(player, code, name); // throws unless this pair is connected
-    const linkId = id(12);
-    this.vcfLinks.set(linkId, { playerId: player.id, code: clean(code, 20).toLowerCase(), name: clean(name, 40), expires: Date.now() + 5 * 60 * 1000 });
-    // The fields ride along so Androids can open the contacts editor prefilled (no file at all).
-    return { url: `/api/vcf/${linkId}`, contact: { name: card.name, phone: card.phone, company: card.company, notes: card.notes } };
-  }
-
-  vcfByLink(linkId) {
-    const l = this.vcfLinks.get(linkId);
-    const player = l && l.expires >= Date.now() ? this.players.get(l.playerId) : null;
-    if (!player) throw new HttpError(410, 'This contact link expired — tap Save again in the app', 'EXPIRED');
-    return this.contactCard(player, l.code, l.name);
-  }
-
-  /**
-   * One member scanned another's QR (or typed their code): the pair connects once, ever, and
-   * BOTH sides earn CONNECT_POINTS — networking is mutual. Accumulates in one running
-   * 'network' attempt per player (capped at 1000), so it counts on the solo board.
-   */
   connect(player, rawCode) {
     if (!this.settings.playOpen || !this.settings.enabledGames.includes('network')) {
       throw new HttpError(403, 'This game is closed right now', 'CLOSED');
     }
+    if (!this.settings.networkOpen) {
+      throw new HttpError(403, '🔗 Power Connections hasn’t started — watch for the announcement!', 'CLOSED');
+    }
     const other = this.playerByConnectCode(rawCode);
     if (!other) throw new HttpError(404, 'No member found for that code — check it and try again');
     if (other.id === player.id) throw new HttpError(400, 'That’s your own code — go meet another member! 😄', 'SELF');
+    // No points — networking is a COUNT. The pair connects once, ever, and it counts for both.
     const mine = this.networkAttempt(player.id, true);
     if (mine.meta.met.includes(other.id)) {
-      return { already: true, points: 0, total: mine.score, met: mine.meta.met.length, other: { ...publicPlayer(other), code: other.connectCode } };
+      return { already: true, met: mine.meta.met.length, other: publicPlayer(other) };
     }
     const theirs = this.networkAttempt(other.id, true);
     const now = Date.now();
-    const gained = Math.min(MAX, mine.score + CONNECT_POINTS) - mine.score;
     mine.meta.met.push(other.id);
-    mine.score += gained;
     mine.finishedAt = now;
     if (!theirs.meta.met.includes(player.id)) {
       theirs.meta.met.push(player.id);
-      theirs.score = Math.min(MAX, theirs.score + CONNECT_POINTS);
       theirs.finishedAt = now;
     }
     this.persist('saveAttempt', mine);
     this.persist('saveAttempt', theirs);
     this.changed();
-    const item = { playerId: player.id, name: player.name, gameId: 'network', score: CONNECT_POINTS, with: other.name, at: now };
+    const item = { playerId: player.id, name: player.name, gameId: 'network', with: other.name, count: mine.meta.met.length, at: now };
     this.recent.unshift(item);
     this.recent.length = Math.min(this.recent.length, 12);
     this.emit('activity', item);
-    return { already: false, points: gained, total: mine.score, met: mine.meta.met.length, other: { ...publicPlayer(other), code: other.connectCode } };
+    return { already: false, met: mine.meta.met.length, other: publicPlayer(other) };
   }
 
   // ------------------------------------------------------------- welcome spin
@@ -603,11 +564,16 @@ class GameState extends EventEmitter {
    * returns the original prize.
    */
   spin(player) {
-    const game = GAME_MAP.spin;
+    const wedges = this.settings.spinWedges;
     const prev = this.spinAttempt(player.id);
-    if (prev) return { already: true, prize: prev.score, index: prev.meta?.index ?? 0, wedges: game.wedges };
-    const index = crypto.randomInt(game.wedges.length);
-    const prize = game.wedges[index];
+    if (prev) {
+      // the wheel may have been reconfigured since — land on the wedge that still shows their prize
+      let index = prev.meta?.index ?? 0;
+      if (wedges[index] !== prev.score) index = Math.max(0, wedges.indexOf(prev.score));
+      return { already: true, prize: prev.score, index, wedges };
+    }
+    const index = crypto.randomInt(wedges.length);
+    const prize = wedges[index];
     const now = Date.now();
     const a = { id: id(12), playerId: player.id, gameId: 'spin', teamId: null, startedAt: now, finishedAt: now, score: prize, meta: { index }, pb: true };
     this.attempts.set(a.id, a);
@@ -617,7 +583,7 @@ class GameState extends EventEmitter {
     this.recent.unshift(item);
     this.recent.length = Math.min(this.recent.length, 12);
     this.emit('activity', item);
-    return { already: false, prize, index, wedges: game.wedges };
+    return { already: false, prize, index, wedges };
   }
 
   /** The full team view for its member: join code, member list, per-game team points and tries. */
@@ -1262,6 +1228,66 @@ class GameState extends EventEmitter {
     return draw;
   }
 
+  /**
+   * Admin opened a game: first its intro plays on the big screen — what it is and how to
+   * play — with a countdown, and only then does the game unlock on phones. That way the
+   * whole room starts together and nobody gets a head start on the per-game championship.
+   */
+  openGame(gameId) {
+    const game = GAME_MAP[gameId];
+    if (!game || game.hosted || game.bonus || game.social) throw new HttpError(400, 'This game cannot be opened this way');
+    if (this.settings.enabledGames.includes(gameId)) throw new HttpError(400, `${game.name} is already open`);
+    if (this.introTimer) clearTimeout(this.introTimer); // a new intro replaces a pending one
+    const opensAt = Date.now() + INTRO_MS;
+    this.pendingIntro = { gameId, opensAt };
+    this.introTimer = setTimeout(() => {
+      this.pendingIntro = null;
+      this.introTimer = null;
+      if (!this.settings.enabledGames.includes(gameId)) {
+        this.settings.enabledGames.push(gameId);
+        this.persist('saveSettings', this.settings);
+        this.emit('settings', this.publicSettings());
+        this.changed();
+      }
+    }, INTRO_MS);
+    const { name, emoji, color, tagline, howTo, duration } = game;
+    this.emit('gameintro', { gameId, name, emoji, color, tagline, howTo, duration, opensAt });
+    return { gameId, opensAt };
+  }
+
+  /**
+   * "This game is over": close it for new tries and crown its champion on the big screen —
+   * the best single solo try, with a podium of the top three. Tries already in progress may
+   * still finish, but the moment is announced with the scores as they stand. The admin can
+   * reopen the game any time with its checkbox.
+   */
+  endGame(gameId) {
+    const game = GAME_MAP[gameId];
+    if (!game || game.hosted || game.bonus || game.social) throw new HttpError(400, 'This game cannot be ended');
+    const best = new Map(); // playerId → their best single solo try
+    for (const a of this.attempts.values()) {
+      if (a.gameId !== gameId || a.teamId || a.score == null) continue;
+      const prev = best.get(a.playerId);
+      if (!prev || a.score > prev.score || (a.score === prev.score && a.finishedAt < prev.finishedAt)) best.set(a.playerId, a);
+    }
+    const podium = [...best.values()]
+      .sort((x, y) => y.score - x.score || x.finishedAt - y.finishedAt)
+      .map((a) => {
+        const p = this.players.get(a.playerId);
+        return p ? { ...publicPlayer(p), score: a.score } : null;
+      })
+      .filter(Boolean)
+      .slice(0, 3);
+    if (!podium.length) throw new HttpError(400, `Nobody has played ${game.name} yet`);
+    this.settings.enabledGames = this.settings.enabledGames.filter((id) => id !== gameId);
+    this.persist('saveSettings', this.settings);
+    this.emit('settings', this.publicSettings());
+    this.changed();
+    const payload = { gameId, name: game.name, emoji: game.emoji, color: game.color, podium, at: Date.now() };
+    this.emit('gamewinner', payload);
+    return payload;
+  }
+
   // ------------------------------------------------------------- leaderboard
 
   /**
@@ -1274,9 +1300,19 @@ class GameState extends EventEmitter {
   board(includeLive = true) {
     const cached = includeLive ? this.cache : this.cacheConfirmed;
     if (cached) return cached;
-    const finished = [...this.attempts.values()].filter((a) => !a.teamId && a.score != null && GAME_MAP[a.gameId]).sort((a, b) => a.finishedAt - b.finishedAt); // games since removed don't count
+    // Power Connections never scores points: it's kept out of the totals and tracked as a count.
+    const finished = [...this.attempts.values()].filter((a) => !a.teamId && a.score != null && a.gameId !== 'network' && GAME_MAP[a.gameId]).sort((a, b) => a.finishedAt - b.finishedAt); // games since removed don't count
     const rows = new Map();
     const leaders = {};
+    const connections = new Map(); // playerId → members connected with; its "champion" is the biggest networker
+    for (const a of this.attempts.values()) {
+      if (a.gameId !== 'network' || a.teamId) continue;
+      const n = a.meta?.met?.length || 0;
+      if (!n) continue;
+      connections.set(a.playerId, n);
+      const p = this.players.get(a.playerId);
+      if (p && (!leaders.network || n > leaders.network.score)) leaders.network = { id: p.id, name: p.name, score: n };
+    }
     for (const a of finished) {
       const p = this.players.get(a.playerId);
       if (!p) continue;
@@ -1310,7 +1346,10 @@ class GameState extends EventEmitter {
       }
     }
     const ranked = [...rows.values()].sort((x, y) => y.total - x.total || x.reachedAt - y.reachedAt);
-    ranked.forEach((r, i) => (r.rank = i + 1));
+    ranked.forEach((r, i) => {
+      r.rank = i + 1;
+      r.connections = connections.get(r.id) || 0;
+    });
 
     const chapterMap = new Map();
     for (const r of ranked) {
@@ -1343,10 +1382,26 @@ class GameState extends EventEmitter {
     if (s.screenMode === 'hidden') return { ...base, ...overlays };
     if (s.screenMode === 'reveal') return { ...base, reveal: s.reveal };
     const confirmed = this.board(false);
+    // Game-by-game nights: while only SOME of the switchable games are open, the main board
+    // becomes the live race for those open games — only their points count and rank here.
+    // Overall totals still decide the reveal, the champions panel, the admin and the CSV.
+    const switchable = GAMES.filter((g) => !g.hosted && !g.bonus && !g.social);
+    const race = switchable.filter((g) => s.enabledGames.includes(g.id));
+    const raceMode = race.length > 0 && race.length < switchable.length;
+    const raceIds = new Set(race.map((g) => g.id));
+    const raceRank = (rows) =>
+      rows
+        .map((r) => ({ ...r, total: race.reduce((sum, g) => sum + (r.scores[g.id] || 0), 0) + (r.live && raceIds.has(r.live.gameId) ? r.live.score : 0) }))
+        .filter((r) => r.total > 0 || (r.live && raceIds.has(r.live.gameId)))
+        .sort((x, y) => y.total - x.total || x.reachedAt - y.reachedAt)
+        .map((r, i) => ({ ...r, rank: i + 1 }));
+    const top = raceMode ? raceRank(board.ranked) : board.ranked;
+    const confirmedTop = raceMode ? raceRank(confirmed.ranked)[0] : confirmed.ranked[0];
     return {
       ...base,
       ...overlays,
-      top: board.ranked.slice(0, SCREEN_TOP).map(publicRow),
+      top: top.slice(0, SCREEN_TOP).map(publicRow),
+      race: raceMode ? race.map((g) => g.id) : null,
       leaders: board.leaders,
       chapters: board.chapters.slice(0, 8),
       // The group-games race: top teams by points from the team games.
@@ -1358,8 +1413,9 @@ class GameState extends EventEmitter {
         .sort((a, b) => b.live.score - a.live.score)
         .slice(0, 8)
         .map((r) => ({ id: r.id, name: r.name, rank: r.rank, gameId: r.live.gameId, score: r.live.score })),
-      // The "New leader" banner follows confirmed scores, so provisional ones don't make it flicker.
-      confirmedLeader: confirmed.ranked[0] ? publicRow(confirmed.ranked[0]) : null,
+      // The "New leader" banner follows confirmed scores, so provisional ones don't make it
+      // flicker — and in a game-by-game race, it celebrates the race leader.
+      confirmedLeader: confirmedTop ? publicRow(confirmedTop) : null,
     };
   }
 
@@ -1379,6 +1435,7 @@ class GameState extends EventEmitter {
         rank: row?.rank ?? null,
         total: row?.total ?? 0,
         scores: row?.scores ?? {},
+        connections: this.networkAttempt(p.id)?.meta.met.length ?? 0,
         tries: Object.values(used).reduce((a, b) => a + b, 0),
         teamTries: Object.values(usedTeam).reduce((a, b) => a + b, 0),
       };
@@ -1391,7 +1448,8 @@ class GameState extends EventEmitter {
     const { reveal, ...settings } = this.settings;
     return {
       settings: { ...settings, revealedAt: reveal?.at ?? null },
-      games: publicGames(),
+      pendingIntro: this.pendingIntro || null, // a game mid-intro on the big screen, about to unlock
+      games: this.gamesPayload(),
       players,
       teams,
       stats: { players: this.players.size, teams: this.teams.size, ranked: board.ranked.length, plays: board.plays, started: this.attempts.size, playing: this.liveScores.size },
@@ -1406,7 +1464,7 @@ class GameState extends EventEmitter {
 
   exportCsv() {
     const { players } = this.adminOverview();
-    const header = ['Rank', 'Name', 'Business', 'Chapter', 'Phone', 'Team', ...GAMES.map((g) => g.name), 'Total', 'Tries', 'Team tries', 'Joined'];
+    const header = ['Rank', 'Name', 'Business', 'Chapter', 'Phone', 'Team', ...GAMES.map((g) => (g.id === 'network' ? 'Connections' : g.name)), 'Total', 'Tries', 'Team tries', 'Joined'];
     const lines = players.map((p) => [
       p.rank ?? '',
       p.name,
@@ -1414,7 +1472,7 @@ class GameState extends EventEmitter {
       p.chapter,
       p.phone,
       p.team,
-      ...GAMES.map((g) => p.scores[g.id] ?? ''),
+      ...GAMES.map((g) => (g.id === 'network' ? p.connections || '' : p.scores[g.id] ?? '')),
       p.total,
       p.tries,
       p.teamTries,

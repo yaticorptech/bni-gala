@@ -1,7 +1,7 @@
 // Big-screen live leaderboard: live board with animated re-ranking, hidden mode, the grand
 // reveal — and the hosted moments (team tap battle, live quiz, lucky draw) as overlays on top,
 // so the screen never leaves the live board.
-import { api, apiUrl, connectSocket, esc, fmt, initials, hue, countUp, sfx, confetti, sleep, photoUrl } from './common.js';
+import { api, apiUrl, connectSocket, esc, fmt, initials, hue, countUp, sfx, confetti, sleep, photoUrl, timers } from './common.js';
 
 const $ = (sel) => document.querySelector(sel);
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -40,7 +40,14 @@ let drawing = false;
 
 const gameById = (id) => games.find((g) => g.id === id);
 // Columns on the board: the games people play on their phones. Hosted moments (Live Quiz) still count in totals, but get no chip.
-const chipGames = () => games.filter((g) => !g.hosted);
+let raceIds = null; // game ids of the current "race" (only some games open), or null for the overall board
+const chipGames = () => games.filter((g) => !g.hosted && (!raceIds || raceIds.includes(g.id)));
+// Per-game columns fit up to ~9 games; beyond that they'd push the sidebar off any screen,
+// so the board shows rank/name/total only and the per-game detail stays in Game champions.
+const chipCols = () => {
+  const cols = chipGames();
+  return cols.length <= 9 ? cols : [];
+};
 const setMode = (mode) => (document.body.dataset.mode = mode);
 const avatar = (e) => initials(e.name); // behind the photo; seen only when a guest has none
 const withEmoji = (e) => esc(e.name);
@@ -99,11 +106,11 @@ function updateRow(r, e) {
     : esc(sub);
   el.classList.toggle('playing', Boolean(liveGame));
   const chips = el.querySelector('.chips');
-  const cols = chipGames();
+  const cols = chipCols();
   chips.classList.toggle('many', cols.length > 6);
   chips.innerHTML = cols
     .map((g) => {
-      const v = e.scores[g.id];
+      const v = g.id === 'network' ? e.connections || null : e.scores[g.id]; // connections are a count, not points
       const isLive = Boolean(e.live && e.live.gameId === g.id);
       const shown = isLive ? (v ?? 0) + e.live.score : v; // this game's points so far, plus the running try
       return `<span class="gchip ${shown == null ? 'off' : ''} ${isLive ? 'live' : ''}">${g.emoji}<b>${shown == null ? '–' : shown}</b></span>`;
@@ -147,6 +154,20 @@ function fitName(r) {
 }
 
 /** Re-render the top list, animating moved rows from their old position (FLIP). */
+/** The "only these games are open" banner over the board; the board then shows their points only. */
+function syncRace(race) {
+  const next = race && race.length ? race : null;
+  if (JSON.stringify(next) !== JSON.stringify(raceIds)) {
+    raceIds = next;
+    renderGamesHead();
+  }
+  const el = $('#race-pill');
+  if (!raceIds) return el.classList.add('hidden');
+  const open = raceIds.map((id) => gameById(id)).filter(Boolean);
+  el.innerHTML = `<i></i><span>NOW PLAYING: <b>${open.map((g) => `${g.emoji} ${esc(g.name)}`).join(' · ')}</b> — this board counts ${open.length === 1 ? 'this game' : 'these games'} only</span>`;
+  el.classList.remove('hidden');
+}
+
 function renderBoard(entries) {
   const board = $('#board');
   const visible = board.offsetParent !== null;
@@ -191,15 +212,18 @@ function renderBoard(entries) {
 }
 
 function renderChampions(leaders) {
-  $('#champions').innerHTML = leaders
-    .map((l) => {
-      const g = gameById(l.gameId);
-      if (!g) return '';
-      return `<li><span class="ce">${g.emoji}</span>
-        <span class="cn"><b>${l.name ? esc(l.name) : '—'}</b><small>${esc(g.name)}</small></span>
-        <span class="cs">${l.score != null ? fmt(l.score) : ''}</span></li>`;
-    })
-    .join('');
+  // Only games someone has actually played — 16 placeholder rows would crowd out the feed.
+  const crowned = leaders.filter((l) => l.name && gameById(l.gameId));
+  $('#champions').innerHTML = crowned.length
+    ? crowned
+        .map((l) => {
+          const g = gameById(l.gameId);
+          return `<li><span class="ce">${g.emoji}</span>
+            <span class="cn"><b>${esc(l.name)}</b><small>${esc(g.name)}</small></span>
+            <span class="cs">${fmt(l.score)}${l.gameId === 'network' ? ' 🤝' : ''}</span></li>`;
+        })
+        .join('')
+    : '<li class="champ-empty">Champions appear as games are played…</li>';
 }
 
 function renderChapters(chapters) {
@@ -259,7 +283,7 @@ function feedItem(a) {
   li.innerHTML = a.fastest
     ? `<span class="fe">⚡</span><span class="ft"><b>${esc(a.name)}</b> was fastest on the Live Quiz · <b>+${fmt(a.score)}</b></span>`
     : a.with
-    ? `<span class="fe">🔗</span><span class="ft"><b>${esc(a.name)}</b> connected with <b>${esc(a.with)}</b> · <b>+${fmt(a.score)}</b> each</span>`
+    ? `<span class="fe">🔗</span><span class="ft"><b>${esc(a.name)}</b> connected with <b>${esc(a.with)}</b> 🤝${a.count ? ` · <b>${fmt(a.count)}</b> built` : ''}</span>`
     : `<span class="fe">${g?.emoji || '🎮'}</span>
     <span class="ft"><b>${esc(a.name)}</b> scored <b>${fmt(a.score)}</b> in ${esc(g?.name || '')}${a.team ? ` for ${a.team.emoji} ${esc(a.team.name)}` : ''}</span>
     ${a.improved ? '<em>NEW BEST</em>' : ''}`;
@@ -716,6 +740,463 @@ async function runDraw(d) {
   drawing = false;
 }
 
+// ------------------------------------------------------------------ game demos (the intro's "watch it being played")
+// A phone mockup with a ghost finger 👆 that plays a scripted round of the game, on loop,
+// so the room SEES how to play before the game unlocks. One little demo per game.
+
+let demoT = null; // timers of the demo currently running
+
+const drand = (n) => Math.floor(Math.random() * n);
+
+/** Glide the finger onto `target` and tap it, then call `done`. */
+function demoTap(finger, target, T, done, travel = 450) {
+  if (!target || !target.isConnected) return;
+  const p = finger.parentElement.getBoundingClientRect();
+  const r = target.getBoundingClientRect();
+  finger.classList.remove('hidden');
+  finger.style.left = `${r.left - p.left + r.width / 2}px`;
+  finger.style.top = `${r.top - p.top + r.height / 2}px`;
+  T.after(() => {
+    finger.classList.add('tap');
+    if (target.isConnected) target.classList.add('demo-hit');
+    T.after(() => {
+      finger.classList.remove('tap');
+      target.classList.remove('demo-hit');
+      done?.();
+    }, 260);
+  }, travel);
+}
+
+/** A floating "+20"-style pop at the target. */
+function demoFloat(screen, target, text, gold = false) {
+  if (!target.isConnected) return;
+  const h = screen.getBoundingClientRect();
+  const r = target.getBoundingClientRect();
+  const f = document.createElement('span');
+  f.className = `demo-float${gold ? ' gold' : ''}`;
+  f.textContent = text;
+  f.style.left = `${r.left - h.left + r.width / 2}px`;
+  f.style.top = `${r.top - h.top}px`;
+  screen.appendChild(f);
+  setTimeout(() => f.remove(), 800);
+}
+
+/** Prompt + options, finger taps the right one, repeat — covers all the quiz-style games. */
+function quizDemo(d, makeRound) {
+  const round = () => {
+    const q = makeRound();
+    d.screen.innerHTML = `${q.cap ? `<div class="dq-cap">${q.cap}</div>` : ''}
+      ${q.prompt ? `<div class="dq-prompt ${q.cls || ''}">${q.prompt}</div>` : ''}
+      <div class="dq-opts ${q.grid ? 'grid' : ''}">${q.options
+        .map((o, i) => `<button class="dq-opt" ${q.styles?.[i] ? `style="background:${q.styles[i]}"` : ''} data-i="${i}">${o}</button>`)
+        .join('')}</div>`;
+    const t = d.screen.querySelector(`[data-i="${q.correct}"]`);
+    d.T.after(() => demoTap(d.finger, t, d.T, () => {
+      t.classList.add('good');
+      demoFloat(d.screen, t, q.pts || '+35');
+      d.T.after(round, 1000);
+    }), 650);
+  };
+  round();
+}
+
+const DEMOS = {
+  frenzy(d) {
+    d.screen.innerHTML = `<div class="dq-cap">Tap as fast as you can!</div><div class="dfz"><button class="dfz-btn"><b>0</b><small>taps</small></button></div>`;
+    const btn = d.screen.querySelector('.dfz-btn');
+    const b = btn.querySelector('b');
+    let n = 0;
+    const go = () => demoTap(d.finger, btn, d.T, () => {
+      b.textContent = ++n;
+      demoFloat(d.screen, btn, '+7');
+      d.T.after(go, 90);
+    }, n ? 40 : 450);
+    go();
+  },
+  rush(d) {
+    d.screen.innerHTML = `<div class="dq-cap">Tap 🤝⭐ · dodge 👻</div><div class="dru">${'<div class="dru-h"></div>'.repeat(9)}</div>`;
+    const holes = [...d.screen.querySelectorAll('.dru-h')];
+    const script = [
+      { i: 1, e: '🤝', pts: '+20', tap: 1 },
+      { i: 5, e: '👻', tap: 0 },
+      { i: 3, e: '⭐', pts: '+50', tap: 1, gold: 1 },
+      { i: 7, e: '🤝', pts: '+20', tap: 1 },
+    ];
+    let k = 0;
+    const step = () => {
+      const s = script[k++ % script.length];
+      const h = holes[s.i];
+      h.textContent = s.e;
+      h.classList.add('up');
+      if (s.tap) {
+        demoTap(d.finger, h, d.T, () => {
+          demoFloat(d.screen, h, s.pts, s.gold);
+          h.classList.remove('up');
+          h.textContent = '';
+          d.T.after(step, 450);
+        });
+      } else {
+        demoFloat(d.screen, h, 'leave it!', false);
+        d.T.after(() => { h.classList.remove('up'); h.textContent = ''; step(); }, 1100);
+      }
+    };
+    step();
+  },
+  reflex(d) {
+    d.screen.innerHTML = `<div class="drx wait"><b>Wait…</b><small>tap the moment it turns GREEN</small></div>`;
+    const pad = d.screen.firstElementChild;
+    const loop = () => {
+      pad.className = 'drx wait';
+      pad.innerHTML = '<b>Wait…</b><small>tap the moment it turns GREEN</small>';
+      d.T.after(() => {
+        pad.className = 'drx go';
+        pad.innerHTML = '<b>TAP!</b>';
+        demoTap(d.finger, pad, d.T, () => {
+          pad.className = 'drx res';
+          pad.innerHTML = '<b>238 ms</b><small>⚡ Lightning fast!</small>';
+          d.T.after(loop, 1400);
+        }, 300);
+      }, 1400);
+    };
+    loop();
+  },
+  memory(d) {
+    d.screen.innerHTML = `<div class="dq-cap">Find the pairs!</div><div class="dmem">${['🤝', '⭐', '⭐', '🤝']
+      .map((e) => `<button class="dmem-c" data-e="${e}">❓</button>`)
+      .join('')}</div>`;
+    const c = [...d.screen.querySelectorAll('.dmem-c')];
+    const flip = (x) => { x.textContent = x.dataset.e; x.classList.add('open'); };
+    const loop = () => {
+      c.forEach((x) => { x.textContent = '❓'; x.classList.remove('open', 'won'); });
+      d.T.after(() => demoTap(d.finger, c[0], d.T, () => {
+        flip(c[0]);
+        demoTap(d.finger, c[3], d.T, () => {
+          flip(c[3]);
+          c[0].classList.add('won');
+          c[3].classList.add('won');
+          demoFloat(d.screen, c[3], 'Pair! ✓');
+          demoTap(d.finger, c[1], d.T, () => {
+            flip(c[1]);
+            demoTap(d.finger, c[2], d.T, () => {
+              flip(c[2]);
+              c[1].classList.add('won');
+              c[2].classList.add('won');
+              demoFloat(d.screen, c[2], 'Pair! ✓');
+              d.T.after(loop, 1300);
+            });
+          });
+        });
+      }), 500);
+    };
+    loop();
+  },
+  colors(d) {
+    const C = [['RED', '#ef4444'], ['BLUE', '#3b82f6'], ['GREEN', '#22c55e'], ['YELLOW', '#facc15']];
+    quizDemo(d, () => {
+      const w = drand(4);
+      let ink = drand(4);
+      if (ink === w) ink = (ink + 1) % 4;
+      return { cap: 'Tap the INK colour — not the word!', prompt: `<span style="color:${C[ink][1]}">${C[w][0]}</span>`, cls: 'big', options: C.map((x) => x[0]), styles: C.map((x) => x[1]), correct: ink, pts: '+30' };
+    });
+  },
+  simon(d) {
+    d.screen.innerHTML = `<div class="dq-cap">Watch the pattern, repeat it!</div><div class="dsim">${['#e3263a', '#3b82f6', '#22c55e', '#facc15']
+      .map((c) => `<button class="dsim-p" style="--c:${c}"></button>`)
+      .join('')}</div>`;
+    const pads = [...d.screen.querySelectorAll('.dsim-p')];
+    const seq = [0, 2, 1];
+    const flash = (i, done) => {
+      pads[i].classList.add('lit');
+      d.T.after(() => { pads[i].classList.remove('lit'); d.T.after(done, 170); }, 380);
+    };
+    const loop = () => {
+      let k = 0;
+      const show = () => (k < seq.length ? flash(seq[k++], show) : repeat(0));
+      const repeat = (j) =>
+        j < seq.length
+          ? demoTap(d.finger, pads[seq[j]], d.T, () => {
+              pads[seq[j]].classList.add('lit');
+              d.T.after(() => { pads[seq[j]].classList.remove('lit'); repeat(j + 1); }, 240);
+            })
+          : (demoFloat(d.screen, pads[2], 'Level up! ✓'), d.T.after(loop, 1200));
+      show();
+    };
+    loop();
+  },
+  odd(d) {
+    quizDemo(d, () => {
+      const pair = [['😀', '😎'], ['🐶', '🐱'], ['🍏', '🍐']][drand(3)];
+      const ci = drand(8);
+      return { cap: 'One is different — tap it!', options: Array.from({ length: 8 }, (_, i) => (i === ci ? pair[1] : pair[0])), correct: ci, grid: true };
+    });
+  },
+  pictionary(d) {
+    const P = [['🦷🪥', 'Dentist'], ['📸💒', 'Photographer'], ['🏠📐', 'Architect'], ['⚖️👔', 'Lawyer']];
+    quizDemo(d, () => {
+      const [emoji, who] = P[drand(P.length)];
+      const others = P.filter((x) => x[1] !== who).map((x) => x[1]);
+      const correct = drand(4);
+      const options = [...others];
+      options.splice(correct, 0, who);
+      return { cap: 'Guess the profession!', prompt: emoji, cls: 'big', options, correct, pts: '+90' };
+    });
+  },
+  math(d) {
+    quizDemo(d, () => {
+      const a = 3 + drand(9);
+      const b = 2 + drand(8);
+      const ans = a + b;
+      const correct = drand(4);
+      const options = [ans - 2, ans + 1, ans + 3].slice(0, 3);
+      options.splice(correct, 0, ans);
+      return { cap: 'Tap the right answer!', prompt: `${a} + ${b} = ?`, cls: 'big', options, correct };
+    });
+  },
+  timing(d) {
+    d.screen.innerHTML = `<div class="drx idle"><b>0.00</b><small>Stop it on exactly 5.00!</small></div>`;
+    const pad = d.screen.firstElementChild;
+    const b = pad.querySelector('b');
+    const sm = pad.querySelector('small');
+    const loop = () => {
+      pad.className = 'drx idle';
+      sm.textContent = 'Stop it on exactly 5.00!';
+      let s = 0;
+      const tick = () => {
+        s += 0.17;
+        if (s < 2) {
+          b.textContent = s.toFixed(2);
+          d.T.after(tick, 60);
+        } else {
+          b.textContent = '🙈';
+          sm.textContent = 'Keep counting in your head…';
+          d.T.after(() => demoTap(d.finger, pad, d.T, () => {
+            pad.className = 'drx res';
+            b.textContent = '4.93';
+            sm.textContent = '70 ms early · 🔥 Sharp!';
+            d.T.after(loop, 1500);
+          }), 1200);
+        }
+      };
+      b.textContent = '0.00';
+      tick();
+    };
+    loop();
+  },
+  hunt(d) {
+    d.screen.innerHTML = `<div class="dq-cap">Tap 1, 2, 3… in order — fast!</div><div class="dhunt">${[3, 1, 4, 2, 6, 5, 8, 7]
+      .map((n) => `<button class="dhunt-c" data-n="${n}">${n}</button>`)
+      .join('')}</div>`;
+    const cell = (n) => d.screen.querySelector(`[data-n="${n}"]`);
+    const loop = (n) => {
+      if (n > 4) {
+        d.T.after(() => {
+          d.screen.querySelectorAll('.dhunt-c').forEach((x) => x.classList.remove('found'));
+          loop(1);
+        }, 1100);
+        return;
+      }
+      demoTap(d.finger, cell(n), d.T, () => { cell(n).classList.add('found'); loop(n + 1); });
+    };
+    loop(1);
+  },
+  balloons(d) {
+    d.screen.innerHTML = `<div class="dq-cap">Pop everything you can!</div><div class="dbal-sky"></div>`;
+    const sky = d.screen.querySelector('.dbal-sky');
+    const colors = ['#f43f5e', '#3b82f6', '#22c55e', '#a855f7'];
+    const spawn = (x, tap) => {
+      const b = document.createElement('div');
+      b.className = 'dbal';
+      b.style.left = `${x}%`;
+      b.style.setProperty('--c', colors[drand(4)]);
+      sky.appendChild(b);
+      setTimeout(() => b.remove(), 3600);
+      if (tap) d.T.after(() => demoTap(d.finger, b, d.T, () => { demoFloat(sky, b, '+20'); b.remove(); }, 250), 1100);
+    };
+    const loop = () => {
+      spawn(15 + drand(25), false);
+      d.T.after(() => spawn(55 + drand(25), true), 400);
+      d.T.after(loop, 1700);
+    };
+    loop();
+  },
+  bullseye(d) {
+    d.screen.innerHTML = `<div class="dq-cap">Stop the marker in the middle!</div><div class="dbe"><div class="dbe-bar"><div class="dbe-m"></div></div><div class="dbe-res"></div></div>`;
+    const m = d.screen.querySelector('.dbe-m');
+    const res = d.screen.querySelector('.dbe-res');
+    const loop = () => {
+      m.classList.remove('stop');
+      res.textContent = '';
+      d.T.after(() => demoTap(d.finger, m.parentElement, d.T, () => {
+        m.classList.add('stop');
+        res.textContent = '🎯 BULLSEYE +100';
+        d.T.after(loop, 1500);
+      }, 300), 1700);
+    };
+    loop();
+  },
+  cups(d) {
+    d.screen.innerHTML = `<div class="dq-cap">Keep your eye on the 💰!</div><div class="dcup"><div class="dcup-m" style="--s:1">💰</div>${[0, 1, 2]
+      .map((i) => `<div class="dcup-c" style="--s:${i}">💼</div>`)
+      .join('')}</div>`;
+    const cs = [...d.screen.querySelectorAll('.dcup-c')];
+    const money = d.screen.querySelector('.dcup-m');
+    const win = cs[1]; // this case hides the money, wherever it slides to
+    const slot = (c) => Number(c.style.getPropertyValue('--s'));
+    const swap = (a, b, done) => {
+      const sa = slot(a);
+      a.style.setProperty('--s', slot(b));
+      b.style.setProperty('--s', sa);
+      d.T.after(done, 520);
+    };
+    const loop = () => {
+      cs.forEach((c) => c.classList.remove('up'));
+      money.style.setProperty('--s', slot(win));
+      money.classList.add('show');
+      win.classList.add('up');
+      d.T.after(() => {
+        win.classList.remove('up');
+        money.classList.remove('show');
+        d.T.after(() => swap(win, cs[0], () => swap(win, cs[2], () => {
+          d.T.after(() => demoTap(d.finger, win, d.T, () => {
+            money.style.setProperty('--s', slot(win));
+            money.classList.add('show');
+            win.classList.add('up');
+            demoFloat(d.screen, win, '+200', true);
+            d.T.after(loop, 1600);
+          }), 400);
+        })), 350);
+      }, 1000);
+    };
+    loop();
+  },
+  higher(d) {
+    const face = (v) => (v === 1 ? 'A' : v === 11 ? 'J' : v === 12 ? 'Q' : v === 13 ? 'K' : v);
+    d.screen.innerHTML = `<div class="dq-cap">Higher or lower?</div><div class="dhl"><b>8</b><span>♠</span></div>
+      <div class="dq-opts"><button class="dq-opt hi">⬆ HIGHER</button><button class="dq-opt lo">⬇ LOWER</button></div>`;
+    const card = d.screen.querySelector('.dhl');
+    let v = 8;
+    const loop = () => {
+      const goHi = v <= 7;
+      const btn = d.screen.querySelector(goHi ? '.hi' : '.lo');
+      d.T.after(() => demoTap(d.finger, btn, d.T, () => {
+        v = goHi ? v + 1 + drand(13 - v) : 1 + drand(v - 1);
+        const red = Math.random() < 0.5;
+        card.innerHTML = `<b>${face(v)}</b><span>${red ? '♥' : '♠'}</span>`;
+        card.classList.toggle('red', red);
+        demoFloat(d.screen, card, '+60');
+        d.T.after(loop, 900);
+      }), 650);
+    };
+    loop();
+  },
+};
+
+function startDemo(gi) {
+  stopDemo();
+  demoT = timers();
+  const screen = $('#demo-screen');
+  const finger = $('#demo-finger');
+  finger.classList.add('hidden');
+  const demo = DEMOS[gi.gameId];
+  if (demo) demo({ screen, finger, T: demoT });
+  else screen.innerHTML = `<div class="demo-fallback">${gi.emoji}</div>`;
+}
+
+function stopDemo() {
+  if (demoT) demoT.clear();
+  demoT = null;
+}
+
+// ------------------------------------------------------------------ game intro (overlay)
+
+let introTimer = null;
+let introHideTimer = null;
+
+/** The admin opened a game: show it being played on a phone mockup, count down, then "GO!". */
+function showIntro(gi) {
+  clearTimeout(introHideTimer); // a new intro cancels the previous one's fade-out
+  for (const id of ['battle-overlay', 'quiz-overlay']) $(`#${id}`).classList.add('hidden');
+  const root = $('#intro-overlay');
+  root.innerHTML = `
+    <div class="gintro" style="--accent:${gi.color}">
+      <div class="gintro-info">
+        <p class="gintro-up">🎮 Next game</p>
+        <h2>${gi.emoji} ${esc(gi.name)}</h2>
+        <p class="gintro-tag">${esc(gi.tagline)}</p>
+        <ul class="gintro-how">${gi.howTo.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
+        <div class="gintro-count" id="gintro-count"></div>
+      </div>
+      <div class="demo-phone"><i class="demo-notch"></i><div class="demo-screen" id="demo-screen"></div><span class="demo-finger hidden" id="demo-finger">👆</span></div>
+    </div>`;
+  root.classList.remove('hidden');
+  startDemo(gi); // the phone mockup plays the game on loop while the room reads along
+  sfx.rise();
+  clearInterval(introTimer);
+  let last = null;
+  introTimer = setInterval(() => {
+    const left = Math.ceil((gi.opensAt - Date.now()) / 1000);
+    if (left > 0) {
+      if (left !== last) {
+        last = left;
+        $('#gintro-count').innerHTML = `Opens on your phones in <b>${left}</b>…`;
+        if (left <= 5) sfx.tick();
+      }
+      return;
+    }
+    clearInterval(introTimer);
+    introTimer = null;
+    $('#gintro-count').innerHTML = `<b class="go">GO — play on your phones! 📱</b>`;
+    sfx.go();
+    sfx.whoosh(0.1);
+    confetti({ duration: 1500, count: 90 });
+    introHideTimer = setTimeout(() => {
+      root.classList.add('hidden');
+      stopDemo();
+    }, 3500);
+  }, 150);
+}
+
+// ------------------------------------------------------------------ game champion (overlay)
+
+let crowning = false;
+
+/** The admin ended a game: a drumroll, then its champion (best single try) with a podium. */
+async function crownGame(w) {
+  if (crowning) return;
+  crowning = true;
+  for (const id of ['battle-overlay', 'quiz-overlay']) $(`#${id}`).classList.add('hidden');
+  const root = $('#winner-overlay');
+  const [first, second, third] = w.podium;
+  root.innerHTML = `
+    <div class="crown" style="--accent:${w.color}">
+      <h2><span class="crown-game">${w.emoji} ${esc(w.name)}</span> · FINAL</h2>
+      <div class="crown-drum" id="crown-drum">And the champion is…</div>
+      <div class="crown-winner hidden" id="crown-winner">
+        <small>🏆 Champion</small>
+        <div class="draw-photo"><img src="${photoUrl(first.name)}" alt="" onerror="this.parentElement.remove()"></div>
+        <b>${withEmoji(first)}</b>
+        ${first.business ? `<span>${esc(first.business)}</span>` : ''}
+        <div class="crown-score">${fmt(first.score)} pts</div>
+      </div>
+      <ul class="crown-podium hidden" id="crown-podium">
+        ${second ? `<li>🥈 ${withEmoji(second)} · ${fmt(second.score)}</li>` : ''}
+        ${third ? `<li>🥉 ${withEmoji(third)} · ${fmt(third.score)}</li>` : ''}
+      </ul>
+    </div>`;
+  root.classList.remove('hidden');
+  sfx.drumroll(2.2);
+  await sleep(2500);
+  $('#crown-drum').classList.add('hidden');
+  $('#crown-winner').classList.remove('hidden');
+  $('#crown-podium').classList.remove('hidden');
+  sfx.crash();
+  sfx.cheer(4, 0.2);
+  confetti({ duration: 6000, count: 240 });
+  await sleep(13000);
+  root.classList.add('hidden');
+  crowning = false;
+}
+
 // ------------------------------------------------------------------ socket
 
 function onBoard(p) {
@@ -732,6 +1213,7 @@ function onBoard(p) {
   }
   if (revealing) return;
   setMode('live');
+  syncRace(p.race);
   renderBoard(p.top || []);
   renderPlaying(p.playing || []);
   renderChampions(p.leaders || []);
@@ -746,8 +1228,9 @@ function onBoard(p) {
 }
 
 function renderGamesHead() {
-  $('#games-head').innerHTML = chipGames().map((g) => `<span title="${esc(g.name)}">${g.emoji}</span>`).join('');
-  $('#games-head').classList.toggle('many', chipGames().length > 6);
+  const cols = chipCols();
+  $('#games-head').innerHTML = cols.map((g) => `<span title="${esc(g.name)}">${g.emoji}</span>`).join('');
+  $('#games-head').classList.toggle('many', cols.length > 6);
 }
 
 /** Re-read the game list and settings — the server was redeployed or we reconnected, and the order or titles may have changed. */
@@ -787,6 +1270,8 @@ async function boot() {
   socket.on('round', onRound);
   socket.on('livequiz', onLive);
   socket.on('luckydraw', runDraw);
+  socket.on('gamewinner', crownGame);
+  socket.on('gameintro', showIntro);
   const clearBoard = () => {
     for (const r of rows.values()) r.el.remove();
     rows.clear();

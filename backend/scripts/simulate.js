@@ -53,6 +53,13 @@ function estimate(gameId, r) {
     case 'simon': return clamp(r.level <= 5 ? r.level * 80 : 400 + (r.level - 5) * 120);
     case 'odd': return clamp(r.correct * 35 - r.wrong * 15);
     case 'frenzy': return clamp(r.taps * 7);
+    case 'math': return clamp(r.correct * 35 - r.wrong * 15);
+    case 'timing': return clamp(r.times.reduce((s, t) => s + Math.max(0, 334 - Math.ceil(Math.abs(t - 5000) / 2)), 0));
+    case 'hunt': return r.found < 20 ? r.found * 10 : clamp(Math.max(150, 1000 - Math.max(0, r.timeMs / 1000 - 18) * 35 - r.wrong * 15));
+    case 'balloons': return clamp(r.popped * 20 + r.golden * 50);
+    case 'bullseye': return clamp(r.offsets.reduce((s, o) => s + (o <= 3 ? 100 : Math.max(0, Math.min(95, Math.round(100 - o * 2.5)))), 0));
+    case 'cups': return clamp(r.correct * 200);
+    case 'higher': return clamp(r.correct * 60 - r.wrong * 20);
     default: return 0;
   }
 }
@@ -78,6 +85,24 @@ function fake(gameId, skill) {
       return { wait: 33500, result: { correct: int(10 + 14 * skill, 16 + 14 * skill), wrong: int(0, 4 * (1.1 - skill)) } };
     case 'frenzy':
       return { wait: 11500, result: { taps: int(55 + 55 * skill, 80 + 60 * skill) } };
+    case 'math':
+      return { wait: 33500, result: { correct: int(8 + 13 * skill, 12 + 15 * skill), wrong: int(0, 5 * (1.2 - skill)) } };
+    case 'timing':
+      return { wait: int(20000, 24000), result: { times: Array.from({ length: 3 }, () => 5000 + int(-900 + 700 * skill, 900 - 700 * skill)) } };
+    case 'hunt': {
+      const timeMs = int(48000 - 26000 * skill, 58000 - 28000 * skill);
+      return { wait: timeMs + 3500, result: { found: 20, wrong: int(0, 6 * (1.1 - skill)), timeMs } };
+    }
+    case 'balloons':
+      return { wait: 33500, result: { popped: int(22 + 26 * skill, 32 + 28 * skill), golden: int(1, 3 + 5 * skill) } };
+    case 'bullseye':
+      return { wait: int(16000, 24000), result: { offsets: Array.from({ length: 10 }, () => int(0, 30 - 24 * skill)) } };
+    case 'cups':
+      return { wait: int(22000, 30000), result: { correct: int(1 + 2 * skill, 3 + 2 * skill) } };
+    case 'higher': {
+      const correct = int(9 + 6 * skill, 13 + 7 * skill);
+      return { wait: 33500, result: { correct, wrong: int(2, 8 * (1.1 - skill)), streak: int(2, Math.min(8, correct)) } };
+    }
     default:
       throw new Error(`no fake for ${gameId}`);
   }

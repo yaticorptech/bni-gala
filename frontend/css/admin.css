@@ -93,3 +93,7 @@ tr:hover td { background: rgba(255, 255, 255, 0.025); }
 
 .pthumb { display: inline-block; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; vertical-align: middle; margin-right: 6px; }
 .pthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.game-row { display: inline-flex; align-items: stretch; gap: 0; }
+.game-row .check { border-radius: 10px 0 0 10px; border-right: 0; }
+.end-btn { border-radius: 0 10px 10px 0; padding: 8px 10px; font-size: 0.85rem; }

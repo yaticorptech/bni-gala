@@ -7,8 +7,15 @@ import pictionary from './games/pictionary.js';
 import simon from './games/simon.js';
 import odd from './games/odd.js';
 import frenzy from './games/frenzy.js';
+import math from './games/math.js';
+import timing from './games/timing.js';
+import hunt from './games/hunt.js';
+import balloons from './games/balloons.js';
+import bullseye from './games/bullseye.js';
+import cups from './games/cups.js';
+import higher from './games/higher.js';
 
-const MODULES = { rush, reflex, memory, colors, pictionary, simon, odd, frenzy };
+const MODULES = { rush, reflex, memory, colors, pictionary, simon, odd, frenzy, math, timing, hunt, balloons, bullseye, cups, higher };
 const VIEWS = ['boot', 'join', 'hub', 'game', 'result', 'tap', 'quiz', 'spin', 'connect'];
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -24,7 +31,6 @@ const S = {
   live: null, // Live Quiz question on the big screen
   liveAt: 0,
   connect: null, // my Power Connections detail (code, points, members met)
-  connectEach: 50, // what a connection pays each side (from the server)
   pendingConnect: '', // a code that arrived via /#c=… before login finished
 };
 let socket = null;
@@ -221,13 +227,13 @@ function gameCardHtml(g, mode = 'solo') {
   const team = mode === 'team';
   const info = team ? S.me.teamDetail?.games[g.id] : S.me.games[g.id];
   if (!info) return '';
-  const open = s.playOpen && (team ? s.teamGames : s.enabledGames).includes(g.id);
+  const open = s.playOpen && (team ? s.teamGames : s.enabledGames).includes(g.id) && (!g.social || s.networkOpen !== false);
   const done = !g.social && info.left === 0; // connections have no try limit
-  const tries = g.social ? `+${fmt(S.connectEach || 50)} each` : info.left === null ? 'unlimited tries' : `${info.left} ${info.left === 1 ? 'try' : 'tries'} left`;
+  const tries = g.social ? 'counts, not points' : info.left === null ? 'unlimited tries' : `${info.left} ${info.left === 1 ? 'try' : 'tries'} left`;
   const status = team
     ? info.points != null ? `<b>${fmt(info.points)}</b> team pts${info.myBest != null ? ` · my best ${fmt(info.myBest)}` : ''}` : 'No team points yet'
     : g.social
-    ? info.points != null ? `<b>${fmt(info.points)}</b> pts from connections` : 'No connections yet'
+    ? S.me.connections ? `<b>${fmt(S.me.connections)}</b> connection${S.me.connections === 1 ? '' : 's'} built` : 'No connections yet'
     : info.points != null ? `<b>${fmt(info.points)}</b> pts from ${info.used} ${info.used === 1 ? 'try' : 'tries'}` : 'Not played yet';
   const cta = !open ? 'Closed' : done ? 'Done ✓' : g.social ? '🔗 Open' : info.used ? 'Again' : 'Play';
   const cls = !open ? 'is-off' : done ? 'is-done' : '';
@@ -323,6 +329,7 @@ function renderHub() {
     });
     if (ok) signedOut();
   };
+
 }
 
 /** Live update from the socket without re-rendering the whole hub. */
@@ -438,7 +445,6 @@ async function browseTeams() {
 
 // ------------------------------------------------------------------ welcome spin
 
-const SPIN_COLORS = ['#e3263a', '#3b82f6', '#22c55e', '#f7c548', '#a855f7', '#f97316', '#06b6d4', '#ec4899'];
 const SPIN_FALLBACK = [100, 200, 50, 300, 75, 250, 125, 150]; // mirror of the server's wheel
 
 /** Land after login/boot: via the welcome spin if this player hasn't had theirs yet. */
@@ -448,28 +454,94 @@ function landHome() {
   else show('hub');
 }
 
-/** The wheel: wedge 0 starts at the top and they run clockwise, matching the server's list. */
+/**
+ * The wheel, drawn like a casino roulette: copper rim with brass studs, red/black prize
+ * pockets (one green when the count is odd, like the zero), a ring of green cells, a copper
+ * bowl and the brass cross-handle turret. Wedge 0 starts at the top and they run clockwise,
+ * matching the server's list.
+ */
 function spinWheelSvg(wedges) {
   const step = 360 / wedges.length;
-  const pt = (deg) => {
+  const pt = (r, deg) => {
     const a = ((deg - 90) * Math.PI) / 180;
-    return `${(100 + 97 * Math.cos(a)).toFixed(1)} ${(100 + 97 * Math.sin(a)).toFixed(1)}`;
+    return `${(100 + r * Math.cos(a)).toFixed(2)} ${(100 + r * Math.sin(a)).toFixed(2)}`;
   };
+  /** An annulus segment between radii r0 (inner) and r1 (outer), from a0 to a1 degrees. */
+  const ring = (r0, r1, a0, a1, fill, stroke = '') =>
+    `<path d="M${pt(r1, a0)} A${r1} ${r1} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${pt(r1, a1)} L${pt(r0, a1)} A${r0} ${r0} 0 ${a1 - a0 > 180 ? 1 : 0} 0 ${pt(r0, a0)} Z" fill="${fill}" ${stroke}/>`;
+  const odd = wedges.length % 2 === 1;
+  const pocket = (i) => (odd && i === 0 ? '#1d8a44' : i % 2 ? '#15171e' : '#cf4028'); // odd count: wedge 0 is the green "zero"
   const slices = wedges
     .map(
-      (w, i) => `<path d="M100 100 L${pt(i * step)} A97 97 0 0 1 ${pt((i + 1) * step)} Z" fill="${SPIN_COLORS[i % SPIN_COLORS.length]}"/>
-      <text transform="rotate(${i * step + step / 2} 100 100)" x="100" y="36">${w}</text>`,
+      (w, i) => `${ring(62, 84, i * step, (i + 1) * step, pocket(i), 'stroke="#d9a21b" stroke-width="0.6"')}
+      <text transform="rotate(${i * step + step / 2} 100 100)" x="100" y="77" style="font-size:${wedges.length > 8 ? 10 : 12.5}px" dy="-50">${w}</text>`,
+    )
+    .join('');
+  // The decorative ring of green cells inside the numbers, like a roulette's inner track.
+  const cells = Array.from({ length: 24 }, (_, i) => ring(49, 60, i * 15 + 1.2, (i + 1) * 15 - 1.2, i % 2 ? '#2f9a4d' : '#237a3a', 'stroke="#0a1f12" stroke-width="0.7"')).join('');
+  const studs = [45, 135, 225, 315]
+    .map((a) => `<path transform="rotate(${a} 100 100)" d="M100 3.6 L103.4 8.4 L100 13.2 L96.6 8.4 Z" fill="url(#sw-brass)" stroke="#6e4d09" stroke-width="0.4" filter="url(#sw-sh)"/>`)
+    .join('');
+  const smallStuds = [0, 90, 180, 270]
+    .map((a) => `<path transform="rotate(${a} 100 100)" d="M100 5.6 L102.2 8.4 L100 11.2 L97.8 8.4 Z" fill="url(#sw-brass)" opacity="0.9"/>`)
+    .join('');
+  const arms = [0, 90, 180, 270]
+    .map(
+      (a) => `<g transform="rotate(${a} 100 100)">
+        <rect x="97.6" y="70" width="4.8" height="32" rx="2.4" fill="url(#sw-brass)" stroke="#7c570b" stroke-width="0.4"/>
+        <rect x="98.4" y="71" width="1.4" height="30" rx="0.7" fill="#fff2c4" opacity="0.55"/>
+        <circle cx="100" cy="68.5" r="5.4" fill="url(#sw-ball)" stroke="#6e4d09" stroke-width="0.4"/>
+      </g>`,
     )
     .join('');
   return `<svg viewBox="0 0 200 200" id="spin-wheel" aria-hidden="true">
-    <circle cx="100" cy="100" r="99" fill="rgba(255,255,255,0.18)"/>${slices}
-    <circle cx="100" cy="100" r="24" fill="#0b0f1a" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
-    <text x="100" y="109" class="spin-hub-emoji">🎡</text>
+    <defs>
+      <radialGradient id="sw-rim" cx="33%" cy="25%" r="100%">
+        <stop offset="0" stop-color="#d89a62"/><stop offset="0.4" stop-color="#b06a35"/><stop offset="0.75" stop-color="#8a4e22"/><stop offset="1" stop-color="#572f14"/>
+      </radialGradient>
+      <radialGradient id="sw-bowl" cx="36%" cy="28%" r="92%">
+        <stop offset="0" stop-color="#e2a86f"/><stop offset="0.45" stop-color="#b06a35"/><stop offset="0.78" stop-color="#8a4f22"/><stop offset="1" stop-color="#5f371a"/>
+      </radialGradient>
+      <linearGradient id="sw-brass" x1="0" y1="0" x2="0.9" y2="1">
+        <stop offset="0" stop-color="#fff0b8"/><stop offset="0.45" stop-color="#e8b83a"/><stop offset="0.8" stop-color="#b3821a"/><stop offset="1" stop-color="#6e4d09"/>
+      </linearGradient>
+      <radialGradient id="sw-ball" cx="32%" cy="28%" r="80%">
+        <stop offset="0" stop-color="#fff0c0"/><stop offset="0.5" stop-color="#e0a81e"/><stop offset="1" stop-color="#7c570b"/>
+      </radialGradient>
+      <!-- crevice shadows where the levels meet: the grooves that make it read as 3-D -->
+      <radialGradient id="sw-depth" gradientUnits="userSpaceOnUse" cx="100" cy="100" r="100">
+        <stop offset="0.46" stop-color="rgba(0,0,0,0)"/><stop offset="0.485" stop-color="rgba(0,0,0,0.42)"/><stop offset="0.5" stop-color="rgba(0,0,0,0.06)"/>
+        <stop offset="0.59" stop-color="rgba(0,0,0,0)"/><stop offset="0.615" stop-color="rgba(0,0,0,0.4)"/><stop offset="0.645" stop-color="rgba(0,0,0,0)"/>
+        <stop offset="0.8" stop-color="rgba(0,0,0,0)"/><stop offset="0.845" stop-color="rgba(0,0,0,0.45)"/><stop offset="0.865" stop-color="rgba(0,0,0,0.08)"/>
+        <stop offset="0.98" stop-color="rgba(0,0,0,0.12)"/><stop offset="1" stop-color="rgba(0,0,0,0.4)"/>
+      </radialGradient>
+      <clipPath id="sw-clip"><circle cx="100" cy="100" r="99"/></clipPath>
+      <filter id="sw-sh" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="1.2" stdDeviation="1.1" flood-color="#000" flood-opacity="0.5"/></filter>
+    </defs>
+    <circle cx="100" cy="100" r="99" fill="url(#sw-rim)" stroke="#3c2008" stroke-width="1.8"/>
+    <circle cx="100" cy="100" r="97.6" fill="none" stroke="rgba(255,226,170,0.35)" stroke-width="0.8"/>
+    ${studs}${smallStuds}
+    <circle cx="100" cy="100" r="86.6" fill="none" stroke="rgba(60,30,8,0.55)" stroke-width="2.4"/>
+    <circle cx="100" cy="100" r="84.8" fill="none" stroke="url(#sw-brass)" stroke-width="1.8"/>
+    ${slices}
+    <circle cx="100" cy="100" r="61.8" fill="none" stroke="url(#sw-brass)" stroke-width="1.6"/>
+    ${cells}
+    <circle cx="100" cy="100" r="100" fill="url(#sw-depth)" pointer-events="none"/>
+    <circle cx="100" cy="100" r="48.5" fill="url(#sw-bowl)" stroke="rgba(30,12,2,0.55)" stroke-width="2"/>
+    <circle cx="100" cy="100" r="43" fill="none" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>
+    <circle cx="100" cy="100" r="36" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
+    <circle cx="100" cy="100" r="29" fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="1"/>
+    <ellipse cx="86" cy="80" rx="30" ry="18" fill="#fff" opacity="0.1" transform="rotate(-28 86 80)"/>
+    <g filter="url(#sw-sh)">${arms}
+      <circle cx="100" cy="100" r="11" fill="url(#sw-ball)" stroke="#6e4d09" stroke-width="0.5"/>
+      <circle cx="96.5" cy="96.5" r="3.6" fill="#fff3cf" opacity="0.8"/>
+    </g>
+    <g clip-path="url(#sw-clip)"><ellipse cx="74" cy="52" rx="82" ry="52" fill="#fff" opacity="0.055" transform="rotate(-18 74 52)"/></g>
   </svg>`;
 }
 
 function renderSpin() {
-  const wedges = gameById('spin')?.wedges || SPIN_FALLBACK;
+  const wedges = S.settings?.spinWedges || gameById('spin')?.wedges || SPIN_FALLBACK;
   const first = S.me.player.name.split(' ')[0];
   $('#view-spin').innerHTML = `
     <div class="spin-stage">
@@ -543,7 +615,6 @@ async function enterConnect() {
   $('#view-connect').innerHTML = '<div class="boot"><div class="spinner"></div></div>';
   try {
     S.connect = await api('/api/connections');
-    S.connectEach = S.connect.each || 50;
   } catch (err) {
     if (err.status === 401) return signedOut('Please log in again');
     toast(err.message);
@@ -559,13 +630,14 @@ function renderConnect() {
   $('#view-connect').innerHTML = `
     <header class="hub-head">
       <div><div class="eyebrow">${g ? `${g.emoji} ${esc(g.name)}` : '🔗 Connections'}</div>
-      <h2>${fmt(d.points)} pts · ${d.met.length} met</h2></div>
+      <h2>🔗 ${d.met.length} connection${d.met.length === 1 ? '' : 's'}</h2></div>
       <button class="icon-btn" id="cx-back" aria-label="Back to games">✕</button>
     </header>
     <section class="card cx-qr">
       <div class="cx-qr-img"><img src="${apiUrl(`/api/connect-qr/${encodeURIComponent(d.code)}`)}" alt="My member QR"></div>
       <div class="cx-code">${esc(d.code.toUpperCase())}</div>
-      <p class="fine center">This is <b>your</b> QR — show it to members you meet. They scan it with any camera app (or type the code) and you <b>both</b> get +${fmt(d.each)}.</p>
+      <p class="fine center">This is <b>your</b> QR — show it to members you meet. They scan it with any camera app (or type the code) and it counts as a connection for you <b>both</b>.</p>
+      ${S.settings.networkOpen === false ? '<p class="fine center">⏸ Power Connections hasn’t started — scans will count once the organiser starts it.</p>' : ''}
     </section>
     <section class="card cx-actions">
       <h3>🤝 Met someone? Connect!</h3>
@@ -583,11 +655,10 @@ function renderConnect() {
             .map(
               (m) => `<div class="cx-met-row">
                 <span class="cx-met-who">${m.emoji || '🤝'} <b>${esc(m.name)}</b><small>${esc([m.business, m.chapter].filter(Boolean).join(' · '))}</small></span>
-                <button class="btn btn-sm" data-save="${m.code}" data-name="${esc(m.name)}" data-chapter="${esc(m.chapter || '')}">📇 Save</button>
               </div>`,
             )
             .join('')}</div>`
-        : `<p class="fine">Nobody yet — go say hi! Every new member is +${fmt(d.each)} for you both.</p>`}
+        : '<p class="fine">Nobody yet — go say hi! Every member you meet counts for you both.</p>'}
     </section>`;
   $('#cx-back').onclick = backToHub;
   $('#cx-form').onsubmit = (e) => {
@@ -596,73 +667,6 @@ function renderConnect() {
   };
   const scan = $('#cx-scan');
   if (scan) scan.onclick = () => scanFlow().catch(() => {});
-  $('#view-connect').querySelectorAll('[data-save]').forEach((b) => {
-    b.addEventListener('click', () => saveContact(b.dataset.save, b.dataset.name, b.dataset.chapter));
-  });
-}
-
-/**
- * "Save their number to my phone": ask what to call them (the "BNI <chapter>" prefix is
- * fixed, the name is the saver's to type), then fetch the vCard and hand it over.
- */
-async function saveContact(code, name, chapter) {
-  sfx.unlock();
-  sfx.tap();
-  const prefix = ['BNI', chapter].filter(Boolean).join(' ');
-  const picked = await modal({
-    title: '📇 Save to contacts',
-    html: `<label class="field"><span>Save the name as</span>
-        <input name="cname" value="${esc(name)}" maxlength="40" autocomplete="off"></label>
-      <p class="fine">Goes into your phone as <b>${esc(prefix)} ‹name›</b> — edit the name if you like.</p>`,
-    ok: '📇 Save contact',
-    cancel: 'Cancel',
-  });
-  if (!picked) return;
-  sfx.good(); // off it goes to the phone's contacts
-  return downloadContact(code, (picked.cname || '').trim() || name);
-}
-
-/**
- * Open the member's contact ON the phone, ready to save — no downloads folder, no extra
- * "open?" prompt. Androids: an intent link opens the contacts editor PREFILLED (name,
- * number, company) so the only tap left is Save; if no app handles it, Chrome falls back
- * to the vCard link. iPhones: navigating to the vCard (served inline) opens it natively
- * with "Create New Contact". The server mints a short-lived link because a page
- * navigation can't carry the login header.
- */
-async function downloadContact(code, contactName) {
-  let link;
-  try {
-    link = await api(`/api/contact/${encodeURIComponent(code)}/link`, { method: 'POST', body: { name: contactName } });
-  } catch (err) {
-    return toast(err.message);
-  }
-  const vcfUrl = apiUrl(link.url);
-  const c = link.contact || {};
-  if (/Android/i.test(navigator.userAgent || '') && c.phone) {
-    const enc = encodeURIComponent;
-    location.href =
-      `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.dir/contact` +
-      `;S.name=${enc(c.name)};S.phone=${enc(c.phone)}` +
-      (c.company ? `;S.company=${enc(c.company)}` : '') +
-      (c.notes ? `;S.notes=${enc(c.notes)}` : '') +
-      `;S.browser_fallback_url=${enc(vcfUrl)};end`;
-    // Chrome may open the editor (done — just Save), or fall back to downloading the card:
-    // Android never lets a page open a download by itself, so point at Chrome's Open button.
-    setTimeout(() => {
-      if (document.hidden) return; // the contacts editor took over — nothing to explain
-      modal({
-        title: '📇 One more tap',
-        html: `<p class="fine">If your <b>Contacts</b> app is open — just tap <b>Save</b> there.</p>
-          <p class="fine">If you saw <b>“File downloaded”</b> at the top instead: tap <b>Open</b> on that bar, then <b>Save</b>. That's the contact (${esc(c.name)}).</p>`,
-        ok: 'Got it',
-        cancel: 'Close',
-      }).catch(() => {});
-    }, 1200);
-    return;
-  }
-  toast('📇 Opening the contact — tap Save / Create contact', 4500);
-  location.href = vcfUrl;
 }
 
 async function submitConnect(raw) {
@@ -682,20 +686,12 @@ async function submitConnect(raw) {
   if (r.already) {
     sfx.flip();
     toast(`You and ${first} are already connected ✓`);
-  } else if (!r.points) {
-    sfx.bonus();
-    toast(`🔗 Connected with ${first}! (your connection points are maxed out)`);
   } else {
     sfx.win();
     sfx.sparkle(0.45);
     vibrate([30, 40, 80]);
     confetti({ duration: 1600, count: 100 });
-    toast(`🔗 Connected with ${r.other.name}! +${fmt(r.points)} for you both`, 4000);
-  }
-  if (r.other.code) {
-    // offer to save their number right away — on a fresh connection AND on a repeat scan,
-    // so scanning someone again always lets you (re)save their contact; Cancel just skips it
-    saveContact(r.other.code, r.other.name, r.other.chapter).catch(() => {});
+    toast(`🔗 Connected with ${r.other.name}! That's ${r.met} connection${r.met === 1 ? '' : 's'} for you`, 4000);
   }
   if (S.view === 'connect') {
     try {
@@ -1276,6 +1272,13 @@ function metaLine(gameId, m) {
     case 'simon': return m.level ? `Sequence of ${m.level} completed` : 'Slipped on the first pad — next time!';
     case 'odd': return `${m.correct} spotted · ${m.wrong} wrong`;
     case 'frenzy': return `${m.taps} taps · ${m.perSec} a second`;
+    case 'math': return `${m.correct} right · ${m.wrong} wrong`;
+    case 'timing': return `Average ${m.avgOffMs} ms off target · best ${m.bestOffMs} ms`;
+    case 'hunt': return m.completed ? `All 20 found in ${(m.timeMs / 1000).toFixed(1)} seconds${m.wrong ? ` · ${m.wrong} wrong tap${m.wrong > 1 ? 's' : ''}` : ''}` : `${m.found}/20 before time ran out`;
+    case 'balloons': return `🎈 ${m.popped} popped · ⭐ ${m.golden} golden`;
+    case 'bullseye': return `🎯 ${m.bulls} bullseye${m.bulls === 1 ? '' : 's'} · average ${m.avgOff} off centre`;
+    case 'cups': return `💰 Found it ${m.correct} of ${m.rounds} times`;
+    case 'higher': return `${m.correct} right · ${m.wrong} wrong${m.streak >= 3 ? ` · best streak ×${m.streak}` : ''}`;
     default: return '';
   }
 }
@@ -1364,6 +1367,10 @@ function connect() {
   socket.on('settings', (settings) => {
     if (JSON.stringify(settings) === JSON.stringify(S.settings)) return;
     const closedNow = S.settings && S.settings.playOpen && !settings.playOpen;
+    // A game that just unlocked (its big-screen intro finished): tell the player to go.
+    const fresh = S.settings && settings.enabledGames.find((id) => !S.settings.enabledGames.includes(id));
+    // Power Connections flipped on or off (the admin's Start/Stop buttons).
+    const netFlip = S.settings && (S.settings.networkOpen !== false) !== (settings.networkOpen !== false) ? settings.networkOpen !== false : null;
     S.settings = settings;
     applyTitle();
     if (S.view === 'join') renderJoin(); // chapter list may have changed
@@ -1372,6 +1379,25 @@ function connect() {
       refreshMe().then(renderHub).catch(() => renderHub());
     }
     if (closedNow && S.view !== 'game') toast('⏸ Games are now closed');
+    else if (fresh && S.view === 'hub') {
+      const g = gameById(fresh);
+      if (g) {
+        toast(`${g.emoji} ${g.name} is OPEN — go go go!`, 5000);
+        sfx.bonus();
+        vibrate([30, 30, 60]);
+      }
+    } else if (netFlip === true) {
+      toast('🔗 Power Connections has STARTED — go meet members!', 5000);
+      sfx.bonus();
+      vibrate([30, 30, 60]);
+    } else if (netFlip === false && S.view !== 'game') {
+      toast('⏹ Power Connections has ended — thanks for networking!', 5000);
+    }
+    if (S.view === 'connect') enterConnect(); // the QR view reflects start/stop straight away
+  });
+
+  socket.on('gameintro', (gi) => {
+    if (S.view === 'hub') toast(`${gi.emoji} ${gi.name} opens in a few seconds — watch the big screen!`, 6000);
   });
 
   socket.on('me', (live) => {
@@ -1455,6 +1481,21 @@ $('#view-hub').addEventListener('click', (e) => {
   if (e.target.closest('#team-leave')) return leaveTeamFlow();
   if (e.target.closest('#team-share')) return shareTeam();
   if (e.target.closest('#team-browse')) return browseTeams();
+});
+
+// Touch ripple on buttons and game cards — pure cosmetics, never in the way of the real handler.
+document.addEventListener('pointerdown', (e) => {
+  const host = e.target.closest('.btn, .icon-btn, .game-card');
+  if (!host || host.disabled) return;
+  const r = host.getBoundingClientRect();
+  const d = Math.max(r.width, r.height) * 2;
+  const s = document.createElement('span');
+  s.className = 'ripple';
+  s.style.width = s.style.height = `${d}px`;
+  s.style.left = `${(e.clientX || r.left + r.width / 2) - r.left - d / 2}px`;
+  s.style.top = `${(e.clientY || r.top + r.height / 2) - r.top - d / 2}px`;
+  host.appendChild(s);
+  setTimeout(() => s.remove(), 650);
 });
 
 boot();

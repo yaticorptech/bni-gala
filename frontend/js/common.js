@@ -218,20 +218,20 @@ export const sfx = {
     muted = Boolean(v);
     storage.set(MUTE_KEY, muted ? '1' : '0');
   },
-  tick: () => tone(660, { dur: 0.08, type: 'square', vol: 0.05 }),
-  go: () => tone(990, { dur: 0.18, type: 'square', vol: 0.06 }),
-  good: () => tone(880, { dur: 0.08, type: 'triangle', to: 1320 }),
-  bonus: () => { tone(988, { dur: 0.08, type: 'triangle' }); tone(1480, { dur: 0.14, type: 'triangle', delay: 0.07 }); },
-  bad: () => tone(220, { dur: 0.2, type: 'sawtooth', vol: 0.06, to: 110 }),
-  flip: () => tone(520, { dur: 0.05, type: 'triangle', vol: 0.06 }),
-  win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, { dur: 0.22, type: 'triangle', delay: i * 0.11 })),
+  tick: () => tone(1700, { dur: 0.045, type: 'sine', vol: 0.06, to: 1300 }), // soft woodblock
+  go: () => { tone(523, { dur: 0.09, type: 'triangle', vol: 0.09 }); tone(1047, { dur: 0.22, type: 'triangle', vol: 0.09, delay: 0.09 }); }, // two-note "and-GO!"
+  good: () => { tone(1047, { dur: 0.055, type: 'square', vol: 0.05 }); tone(1568, { dur: 0.16, type: 'square', vol: 0.045, delay: 0.055 }); }, // arcade coin
+  bonus: () => [1319, 1760, 2217].forEach((f, i) => tone(f, { dur: 0.09, type: 'sine', vol: 0.07, delay: i * 0.055 })), // glassy sparkle up
+  bad: () => { tone(280, { dur: 0.22, type: 'triangle', vol: 0.09, to: 95 }); noise({ dur: 0.12, vol: 0.05, freq: 220, q: 1 }); }, // soft womp + thud
+  flip: () => tone(640, { dur: 0.05, type: 'sine', vol: 0.07, to: 880 }),
+  win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => { tone(f, { dur: 0.17, type: 'triangle', vol: 0.09, delay: i * 0.085 }); tone(f * 2, { dur: 0.11, type: 'sine', vol: 0.03, delay: i * 0.085 }); }), // brighter 5-note fanfare
   drum: () => { for (let i = 0; i < 14; i++) tone(90 + Math.random() * 30, { dur: 0.07, type: 'triangle', vol: 0.15, delay: i * 0.07 }); },
-  /** A plain note (Handshake Sequence pads). */
-  note: (f, dur = 0.3) => tone(f, { dur, type: 'sine', vol: 0.12 }),
-  /** Rising pitch with the streak count — the longer the streak, the higher it climbs. */
-  combo: (n) => { const f = 440 * Math.pow(1.06, Math.min(n, 24)); tone(f, { dur: 0.1, type: 'triangle', vol: 0.1, to: f * 1.5 }); },
+  /** A plain note (Handshake Sequence pads) with a quiet octave shimmer on top. */
+  note: (f, dur = 0.3) => { tone(f, { dur, type: 'sine', vol: 0.11 }); tone(f * 2, { dur: dur * 0.7, type: 'sine', vol: 0.03 }); },
+  /** Climbs a bright ladder with the streak — two layered voices so long streaks feel big. */
+  combo: (n) => { const f = 523 * Math.pow(1.095, Math.min(n, 22)); tone(f, { dur: 0.07, type: 'square', vol: 0.055 }); tone(f * 1.5, { dur: 0.12, type: 'sine', vol: 0.05, delay: 0.05 }); },
   /** Final-seconds warning. */
-  alarm: () => { tone(880, { dur: 0.09, type: 'square', vol: 0.05 }); tone(880, { dur: 0.09, type: 'square', vol: 0.05, delay: 0.14 }); },
+  alarm: () => { tone(740, { dur: 0.1, type: 'triangle', vol: 0.07 }); tone(740, { dur: 0.1, type: 'triangle', vol: 0.07, delay: 0.16 }); },
 
   // ---- big-screen set: a score chime, risers, a brass fanfare, drumroll, cymbal and applause
   /** A finished game on the feed: brighter for a higher score, spaced out so a busy room never machine-guns. Returns its delay. */
@@ -249,14 +249,14 @@ export const sfx = {
   sparkle: (delay = 0) => [1568, 1976, 2637].forEach((f, i) => tone(f, { dur: 0.09, type: 'sine', vol: 0.06, delay: delay + i * 0.06 })),
   /** Upward sweep: someone climbs into the top 3, the lead changes. */
   rise: () => tone(330, { dur: 0.32, type: 'sine', vol: 0.09, to: 1320 }),
-  /** Tiny click for each tap in the team battle. */
-  tap: () => tone(1500, { dur: 0.025, type: 'triangle', vol: 0.035, to: 900 }),
-  /** Tap click whose pitch climbs with the pace (taps per second), so speed is audible. */
-  tapAt: (pace = 0) => { const f = 900 + Math.min(16, pace) * 70; tone(f, { dur: 0.03, type: 'triangle', vol: 0.04, to: f * 0.6 }); },
-  /** Fever mode engaged: a quick bright arpeggio. */
-  fever: () => [659, 784, 988, 1319].forEach((f, i) => tone(f, { dur: 0.09, type: 'square', vol: 0.045, delay: i * 0.05 })),
+  /** Tiny pluck for each tap in the team battle. */
+  tap: () => tone(1300, { dur: 0.03, type: 'sine', vol: 0.05, to: 700 }),
+  /** Tap pluck whose pitch climbs with the pace (taps per second), so speed is audible. */
+  tapAt: (pace = 0) => { const f = 700 + Math.min(16, pace) * 85; tone(f, { dur: 0.035, type: 'sine', vol: 0.05, to: f * 0.55 }); },
+  /** Fever mode engaged: a fast bright run. */
+  fever: () => [659, 784, 988, 1319, 1568].forEach((f, i) => tone(f, { dur: 0.08, type: 'triangle', vol: 0.06, delay: i * 0.045 })),
   /** Time's up. */
-  buzz: () => { tone(170, { dur: 0.42, type: 'square', vol: 0.05, to: 120 }); tone(173, { dur: 0.42, type: 'sawtooth', vol: 0.03, to: 118 }); },
+  buzz: () => { tone(150, { dur: 0.45, type: 'square', vol: 0.05, to: 95 }); tone(152, { dur: 0.45, type: 'sawtooth', vol: 0.03, to: 97 }); },
   whoosh: (delay = 0) => noise({ dur: 0.35, vol: 0.08, freq: 500, to: 3200, q: 1.2, attack: 0.08, delay }),
   crash: (delay = 0) => { noise({ dur: 1.4, vol: 0.14, type: 'highpass', freq: 4500, attack: 0.004, delay }); noise({ dur: 0.5, vol: 0.08, freq: 9000, q: 0.6, attack: 0.004, delay }); },
   /** Brass-style fanfare: a run up, then a held chord. */

@@ -563,14 +563,20 @@ function spinWheelSvg(wedges) {
   const R = 85; // wedge radius inside the rim
   const slice = (i) =>
     `<path d="M100 100 L${pt(R, i * step)} A${R} ${R} 0 ${step > 180 ? 1 : 0} 1 ${pt(R, (i + 1) * step)} Z" fill="${color(i)}" stroke="#fff" stroke-width="1.1"/>`;
-  // The label runs along the wedge, centre to rim. Its size respects both the radial room
-  // for its length AND the wedge's width where the text begins, so neighbours never overlap.
+  // The label sits centred along its wedge, clear of the hub and the rim. Multi-word names
+  // stack on two lines so each line stays short and the type can stay BIG and readable.
   const label = (w, i) => {
-    const text = String(w);
-    const startR = 30; // distance from the hub where the text starts
-    const halfWidth = startR * Math.sin((Math.PI * step) / 360); // wedge half-width there
-    const fs = Math.max(5.2, Math.min(12, 80 / Math.max(4, text.length), halfWidth * 1.35));
-    return `<text transform="rotate(${i * step + step / 2 - 90} 100 100)" x="${100 + startR}" y="100" dominant-baseline="middle" text-anchor="start" style="font-size:${fs.toFixed(1)}px">${esc(text)}</text>`;
+    const words = String(w).split(' ');
+    const two = words.length > 1;
+    const cut = Math.ceil(words.length / 2);
+    const lines = two ? [words.slice(0, cut).join(' '), words.slice(cut).join(' ')] : [String(w)];
+    const longest = Math.max(...lines.map((l) => l.length));
+    const tang = 56 * Math.sin((Math.PI * step) / 360); // half the wedge's width at the text's radius
+    const fs = Math.max(5.5, Math.min(12, 52 / (0.62 * Math.max(3, longest)), two ? tang * 0.8 : tang * 1.5));
+    const tspans = lines
+      .map((l, k) => `<tspan x="156" dy="${k === 0 ? (two ? '-0.32em' : '0') : '1.08em'}">${esc(l)}</tspan>`)
+      .join('');
+    return `<text transform="rotate(${i * step + step / 2 - 90} 100 100)" x="156" y="100" dominant-baseline="middle" text-anchor="middle" style="font-size:${fs.toFixed(1)}px">${tspans}</text>`;
   };
   const bulbs = Array.from({ length: 16 }, (_, i) => {
     const [cx, cy] = pt(92.5, i * 22.5).split(' ');

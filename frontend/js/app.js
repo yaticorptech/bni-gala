@@ -614,14 +614,8 @@ function renderSpin() {
       <div class="spin-box"><div class="spin-pointer">▼</div>${spinWheelSvg(wedges)}</div>
       <div class="spin-result" id="spin-result"></div>
       <button class="btn btn-gold btn-lg" id="spin-btn">🎡 SPIN!</button>
-      <button class="link" id="spin-skip">Skip for now →</button>
     </div>`;
   show('spin');
-  $('#spin-skip').onclick = () => {
-    sfx.unlock();
-    sfx.tap();
-    show('hub'); // not spun yet, so it comes back next login
-  };
   $('#spin-btn').onclick = () => doSpin().catch(() => {});
 }
 
@@ -640,7 +634,6 @@ async function doSpin() {
   }
   S.me.spin = { spun: true, prize: res.prize };
   if (res.already) return backToHub(); // spun on another device — the prize is already on the score
-  $('#spin-skip')?.remove();
   sfx.whoosh(); // the wheel takes off
   vibrate(20);
   const wedges = res.wedges || SPIN_FALLBACK;

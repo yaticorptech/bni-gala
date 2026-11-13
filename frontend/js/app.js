@@ -80,7 +80,7 @@ function modal({ title, html, ok = 'OK', cancel = 'Cancel' }) {
       <h3>${title}</h3>
       ${html}
       <div class="modal-actions">
-        <button class="btn btn-ghost" data-act="no">${esc(cancel)}</button>
+        ${cancel === false ? '' : `<button class="btn btn-ghost" data-act="no">${esc(cancel)}</button>`}
         <button class="btn btn-primary" data-act="yes">${esc(ok)}</button>
       </div>
     </div>`;
@@ -656,7 +656,7 @@ async function doSpin() {
   $('#spin-go').onclick = backToHub;
   // The big moment gets a pop-up of its own: what they won, front and centre.
   await sleep(500);
-  const go = await modal({
+  await modal({
     title: '🎉 Congratulations!',
     html: `<div class="win-pop">
         <div class="win-pop-emoji">${isPts ? '🪙' : '🎁'}</div>
@@ -664,10 +664,9 @@ async function doSpin() {
         <p class="fine center">${isPts ? 'Added straight to your score — well spun!' : 'Your gift is saved on your profile ticket — show it at the prize desk to collect it!'}</p>
       </div>`,
     ok: 'Let’s play →',
-    cancel: '👤 My profile',
+    cancel: false,
   });
-  if (go) backToHub();
-  else enterProfile(); // straight to the ticket
+  backToHub();
 }
 
 // ------------------------------------------------------------------ power connections (networking)

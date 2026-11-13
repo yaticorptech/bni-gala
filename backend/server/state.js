@@ -1368,7 +1368,7 @@ class GameState extends EventEmitter {
       if (!n) continue;
       connections.set(a.playerId, n);
       const p = this.players.get(a.playerId);
-      if (p && (!leaders.network || n > leaders.network.score)) leaders.network = { id: p.id, name: p.name, score: n };
+      if (p && (!leaders.network || n > leaders.network.score)) leaders.network = { id: p.id, name: p.name, chapter: p.chapter || '', score: n };
     }
     for (const a of finished) {
       const p = this.players.get(a.playerId);
@@ -1383,7 +1383,7 @@ class GameState extends EventEmitter {
       row.scores[a.gameId] = (row.scores[a.gameId] || 0) + a.score;
       row.reachedAt = a.finishedAt;
       // The game champion is still the best single try.
-      if (!leaders[a.gameId] || a.score > leaders[a.gameId].score) leaders[a.gameId] = { id: p.id, name: p.name, score: a.score };
+      if (!leaders[a.gameId] || a.score > leaders[a.gameId].score) leaders[a.gameId] = { id: p.id, name: p.name, chapter: p.chapter || '', score: a.score };
     }
     if (includeLive) {
       const now = Date.now();

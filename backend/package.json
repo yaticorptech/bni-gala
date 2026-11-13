@@ -2,7 +2,7 @@
   "name": "bni-arena",
   "version": "1.0.0",
   "private": true,
-  "description": "BNI Game Arena: chapter login, solo games, player-made teams and group games, with a live big-screen leaderboard",
+  "description": "BNI Awards: chapter login, solo games, player-made teams and group games, with a live big-screen leaderboard",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",

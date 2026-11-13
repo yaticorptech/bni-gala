@@ -222,7 +222,7 @@ function renderChampions(leaders) {
         .map((l) => {
           const g = gameById(l.gameId);
           return `<li><span class="ce">${g.emoji}</span>
-            <span class="cn"><b>${esc(l.name)}</b><small>${esc(g.name)}</small></span>
+            <span class="cn"><b>${esc(l.name)}</b><small>${esc(g.name)}${l.chapter ? ` · ${esc(l.chapter)}` : ''}</small></span>
             <span class="cs">${fmt(l.score)}${l.gameId === 'network' ? ' 🤝' : ''}</span></li>`;
         })
         .join('')
@@ -1088,12 +1088,12 @@ async function crownGame(w) {
         <small>🏆 Champion</small>
         <div class="draw-photo"><img src="${photoUrl(first.name)}" alt="" onerror="this.parentElement.remove()"></div>
         <b>${withEmoji(first)}</b>
-        ${first.business ? `<span>${esc(first.business)}</span>` : ''}
+        ${first.chapter || first.business ? `<span>${[first.chapter && `from ${esc(first.chapter)}`, first.business && esc(first.business)].filter(Boolean).join(' · ')}</span>` : ''}
         <div class="crown-score">${fmt(first.score)} pts</div>
       </div>
       <ul class="crown-podium hidden" id="crown-podium">
-        ${second ? `<li>🥈 ${withEmoji(second)} · ${fmt(second.score)}</li>` : ''}
-        ${third ? `<li>🥉 ${withEmoji(third)} · ${fmt(third.score)}</li>` : ''}
+        ${second ? `<li>🥈 ${withEmoji(second)}${second.chapter ? ` (${esc(second.chapter)})` : ''} · ${fmt(second.score)}</li>` : ''}
+        ${third ? `<li>🥉 ${withEmoji(third)}${third.chapter ? ` (${esc(third.chapter)})` : ''} · ${fmt(third.score)}</li>` : ''}
       </ul>
     </div>`;
   root.classList.remove('hidden');

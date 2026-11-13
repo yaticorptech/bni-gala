@@ -2,7 +2,7 @@
   "name": "bni-gala",
   "version": "1.0.0",
   "private": true,
-  "description": "BNI Game Arena — monorepo root. Railway deploys from here (the workspace delegates to backend/); Vercel deploys frontend/ as its root directory.",
+  "description": "BNI Awards — monorepo root. Railway deploys from here (the workspace delegates to backend/); Vercel deploys frontend/ as its root directory.",
   "workspaces": [
     "backend"
   ],

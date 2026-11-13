@@ -672,6 +672,20 @@ async function doSpin() {
   $('#spin-result').innerHTML = `<span class="spin-prize">${isPts ? `+${fmt(res.prize)} points!` : `🎁 ${esc(res.prize)}!`}</span>`;
   btn.outerHTML = '<button class="btn btn-primary btn-lg" id="spin-go">Let’s play →</button>';
   $('#spin-go').onclick = backToHub;
+  // The big moment gets a pop-up of its own: what they won, front and centre.
+  await sleep(500);
+  const go = await modal({
+    title: '🎉 Congratulations!',
+    html: `<div class="win-pop">
+        <div class="win-pop-emoji">${isPts ? '🪙' : '🎁'}</div>
+        <div class="win-pop-prize">${isPts ? `+${fmt(res.prize)} points` : esc(res.prize)}</div>
+        <p class="fine center">${isPts ? 'Added straight to your score — well spun!' : 'Your gift is saved on your profile ticket — show it at the prize desk to collect it!'}</p>
+      </div>`,
+    ok: 'Let’s play →',
+    cancel: '👤 My profile',
+  });
+  if (go) backToHub();
+  else enterProfile(); // straight to the ticket
 }
 
 // ------------------------------------------------------------------ power connections (networking)

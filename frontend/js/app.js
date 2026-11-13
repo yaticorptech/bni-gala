@@ -611,7 +611,11 @@ function spinWheelSvg(wedges) {
     const tspans = lines
       .map((l, k) => `<tspan x="156" dy="${k === 0 ? (two ? '-0.32em' : '0') : '1.08em'}">${esc(l)}</tspan>`)
       .join('');
-    return `<text transform="rotate(${i * step + step / 2 - 90} 100 100)" x="156" y="100" dominant-baseline="middle" text-anchor="middle" style="font-size:${fs.toFixed(1)}px">${tspans}</text>`;
+    // A little gift box sits between the hub and the name on every wedge.
+    return `<g transform="rotate(${i * step + step / 2 - 90} 100 100)">
+      <text x="124" y="100" dominant-baseline="middle" text-anchor="middle" class="wedge-gift" style="font-size:9.5px">🎁</text>
+      <text x="156" y="100" dominant-baseline="middle" text-anchor="middle" style="font-size:${fs.toFixed(1)}px">${tspans}</text>
+    </g>`;
   };
   const bulbs = Array.from({ length: 16 }, (_, i) => {
     const [cx, cy] = pt(92.5, i * 22.5).split(' ');
